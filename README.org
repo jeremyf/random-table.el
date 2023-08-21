@@ -4,6 +4,8 @@ Welcome to =random-table.el=, an Emacs package for defining random tables and ro
 
 I’ve been blogging about this in my [[https://takeonrules.com/series/emacs-random-table-el-package/][Emacs random-table.el Package series]].
 
+You may also find [[https://github.com/jeremyf/dotemacs/blob/main/emacs.d/random-tables-data.el][my random-tables-data.el]] useful for what I’ve been setting up.
+
 * Introduction
 
 There are two primary functions:
