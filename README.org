@@ -1,4 +1,4 @@
-#+title: README
+#+title: README for Random Table Package
 
 Welcome to =random-table.el=, an Emacs package for defining random tables and rolling on them.  What is a random table?  Maybe it’s a list of given names.  And you pick a random given name from that list.  Maybe it’s the creatures appearing in an RPG dungeon.  And you want to randomly select the creature that challenges the party.
 
@@ -21,6 +21,23 @@ There are two primary functions:
 - Custom “Reporter” :: By default, the results are written to the =*Messages*= buffer and added to the kill ring.  But you can configure to have a different reporter.  (see =random-table/reporter=)
 
 And more.
+
+* Installation
+
+As of <2023-08-21 Mon> this repository is not yet part of any of the package archive (e.g. https://melpa.org).  But you can install it via =use-package=.
+
+#+begin_src emacs-lisp
+  (use-package random-table
+    :straight (:host github :repo "jeremyf/random-table.el"))
+#+end_src
+
+I have tested this using Emacs v29.1; it might work with earlier versions.
+
+** Dependencies
+
+I make use of the ubiquitous =s= package (See https://melpa.org/#/s) (as of <2023-08-21 Mon> that is for =s-format= and =s-trim=).
+
+Originally, I relied on =org-d20= for dice rolling, but extracted the minimum viable logic for interpolating dice rolls (e.g. Evaluate “There are ${1d4} doors.” to roll one four-sided die and message the string “There are 3 doors.”)
 
 * Defining Tables
 
