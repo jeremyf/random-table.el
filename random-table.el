@@ -206,6 +206,7 @@ See `random-table/roller' macro."
 (random-table/roller :label "1d10" (+ 1 (random 10)))
 (random-table/roller :label "1d12" (+ 1 (random 12)))
 (random-table/roller :label "1d20" (+ 1 (random 20)))
+(random-table/roller :label "1d100" (+ 1 (random 100)))
 
 (defun random-table/filter/default (&rest rolls)
   "Filter the given ROLLS and return an integer.
