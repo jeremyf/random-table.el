@@ -130,10 +130,10 @@ as whether there are unexpected events.  All from the same roll."
 When the given VALUE cannot be found in the
 `random-table/stroage/tables' registry we look to ALLOW_NIL.
 
-When ALLOW_NIL is non-nil, we return `nil' when no table is found
+When ALLOW_NIL is non-nil, we return nil when no table is found
 in `random-table/stroage/tables' registry.
 
-When ALLOW_NIL is `nil' we raise an `error' when no table was
+When ALLOW_NIL is nil we raise an `error' when no table was
 found in the `random-table/stroage/tables' registry."
   (if-let ((table (cond
                     ((random-table-p value)
@@ -145,12 +145,12 @@ found in the `random-table/stroage/tables' registry."
                     ((integerp value)
                       nil)
                     (t
-                      (error "Expected %s to be a `random-table', `symbol', `integer', or `string' got %s."
+                      (error "Expected %s to be a `random-table', `symbol', `integer', or `string' got %s"
                         value
                         (type-of value))))))
     table
     (unless allow_nil
-      (error "Could not find table %s; use `random-table/register'." value))))
+      (error "Could not find table %s; use `random-table/register'" value))))
 
 (defvar random-table/storage/results
   (make-hash-table)
@@ -169,6 +169,7 @@ The hash value is the contents of the table.")
 
 ;;; Random Table Roller
 (cl-defmacro random-table/roller (&rest body &key label &allow-other-keys)
+  "Create a LABEL named roller that \"rolls\" the BODY."
   (let ((roller (intern (concat "random-table/roller/" label)))
          (docstring (format "Roll %s on given TABLE" label)))
     `(defun ,roller (table)
@@ -289,6 +290,8 @@ Either by evaluating as a `random-table' or via `s-format'."
 - 2: operator (e.g. \"+\", \"-\", \"*\")
 - 3. right operand")
 
+(defvar random-table/current-roll nil)
+
 (defun random-table/roll/parse-text/replacer (text)
   "Roll the TEXT; either from a table or as a dice-expression.
 
@@ -356,6 +359,7 @@ use those dice to lookup on other tables."
 ;;
 ;; TODO Consider preserving the granular results (e.g. die one rolled a 4, etc)
 (defun random-table/dice/roll (spec-string)
+  "Evaluate the given SPEC-STRING by parsing as a dice expression."
   (apply #'random-table/dice/roll-spec
     (random-table/dice/parse-spec spec-string)))
 
@@ -379,6 +383,7 @@ use those dice to lookup on other tables."
       (random-table/dice/string-to-number (match-string 3 spec) 0))))
 
 (defun random-table/dice/string-to-number (spec default)
+  "Convert the SPEC (and DEFAULT) into an integer."
   (let ((n (if (stringp spec)
              (string-to-number spec)
              0)))
@@ -389,11 +394,12 @@ use those dice to lookup on other tables."
       (t spec))))
 
 (defun random-table/dice/roll-spec (number-dice faces modifier)
+  "Roll the NUMBER-DICE each with FACES number of sides and add MODIFIER."
   ;; TODO Consider returning a list for further inspection.
-  (setq-local amount modifier)
-  (dotimes (i number-dice)
-    (setq-local amount (+ amount 1 (random faces))))
-  amount)
+  (let ((amount modifier))
+    (dotimes (i number-dice)
+      (setq amount (+ amount 1 (random faces))))
+    amount))
 
 ;;;; Interactive
 ;;;###autoload
@@ -403,9 +409,8 @@ use those dice to lookup on other tables."
 This can either be a named table or a general text (e.g. 2d6).
 Or a combination of multiple tables.
 
-When you pass the universal prefix arg (e.g. \"C-u M-x
-random-table/roll\"), you'll be prompted to physically roll dice
-for the various tables.
+When you pass the universal prefix arg, you'll be prompted to
+physically roll dice for the various tables.
 
 When you pass \"2d6\" and pass the universal prefix arg, you will
 not be prompted to roll \"2d6\" dice, it rolls that.  In other
