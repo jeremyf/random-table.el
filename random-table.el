@@ -290,39 +290,55 @@ Either by evaluating as a `random-table' or via `s-format'."
 - 2: operator (e.g. \"+\", \"-\", \"*\")
 - 3. right operand")
 
-(defvar random-table/current-roll nil)
+(defvar random-table/roll/pass-roller-regex
+  "\\([\\[+]\\)\\ \\[\\(.*\\)\\]"
 
-(defun random-table/roll/parse-text/replacer (text)
+  "A regular expression with two capture regions:
+
+- 1: table name
+- 2: roller expression (e.g. \"2d6\")")
+
+(defvar random-table/current-roll
+  nil)
+
+(defun random-table/roll/parse-text/replacer (text &optional roller-expression)
   "Roll the TEXT; either from a table or as a dice-expression.
 
-This is constructed as the replacer function of `s-format'."
-  (if-let ((table (random-table/get-table text :allow_nil t)))
-    (random-table/evaluate/table table)
-    (cond
-      ((string-match random-table/roll/math-operation-regex text)
-        (let* ((left-operand (match-string-no-properties 1 text))
-                (operator (match-string-no-properties 2 text))
-                (right-operand (match-string-no-properties 3 text)))
-          (funcall (intern operator)
-            (string-to-number
-              (random-table/roll/parse-text/replacer left-operand))
-            (string-to-number
-              (random-table/roll/parse-text/replacer right-operand)))))
-      ((and random-table/current-roll (string-match "current_roll" text))
-        random-table/current-roll)
-      (t
-        ;; Ensure that we have a dice expression
-        (if (string-match-p random-table/dice/regex (s-trim text))
-          (format "%s" (random-table/dice/roll (s-trim text)))
-          text)))))
+This is constructed as the replacer function of `s-format'.
 
-(defun random-table/evaluate/table (table)
-  "Evaluate the random TABLE.
+WHen given ROLLER-EXPRESSION, use that instead of the table's roller."
+  (if-let ((table (random-table/get-table text :allow_nil t)))
+      (random-table/evaluate/table table roller-expression)
+    (cond
+     ((string-match random-table/roll/math-operation-regex text)
+      (let* ((left-operand (match-string-no-properties 1 text))
+             (operator (match-string-no-properties 2 text))
+             (right-operand (match-string-no-properties 3 text)))
+	;; TODO: Should we be passing the roller expression?
+        (funcall (intern operator)
+		 (string-to-number
+		  (random-table/roll/parse-text/replacer left-operand))
+		 (string-to-number
+		  (random-table/roll/parse-text/replacer right-operand)))))
+     ((string-match random-table/roll/pass-roller-regex text)
+      (let* ((table-name (match-string-no-properties 1 text))
+	     (roller-expression (match-string-no-properties 2 text)))
+	(funcall (random-table/roll/parse-text/replacer table-name roller-expression))))
+     ((and random-table/current-roll (string-match "current_roll" text))
+      random-table/current-roll)
+     (t
+      ;; Ensure that we have a dice expression
+      (if (string-match-p random-table/dice/regex (s-trim text))
+          (format "%s" (random-table/dice/roll (s-trim text)))
+        text)))))
+
+(defun random-table/evaluate/table (table &optional roller-expression)
+  "Evaluate the random TABLE, optionally using the given ROLLER-EXPRESSION.
 
 See `random-table' structure."
   (let* ((data (random-table-data table))
           (name (random-table-name table))
-          (rolled (random-table/evaluate/table/roll table)))
+          (rolled (random-table/evaluate/table/roll table roller-expression)))
     ;; TODO: This is wildly naive.  Perhaps the current_roll needs to be
     ;; replaced with the "${Current Roll for [My Tablename]}".  Then we can
     ;; Cache that rolled value and retrieve it.
@@ -336,8 +352,10 @@ See `random-table' structure."
       (setq random-table/current-roll nil)
       results)))
 
-(defun random-table/evaluate/table/roll (table)
-  "Roll on the TABLE, favoring re-using and caching values.
+(defun random-table/evaluate/table/roll (table &optional roller-expression)
+  "Roll on the TABLE, conditionally using ROLLER-EXPRESSION
+
+This function favors re-using and caching values.
 
 Why cache values?  Some tables you roll one set of dice and then
 use those dice to lookup on other tables."
@@ -345,12 +363,25 @@ use those dice to lookup on other tables."
           (or (when-let ((reuse-table-name (random-table-reuse table)))
                 (or
                   (gethash (intern reuse-table-name) random-table/storage/results)
-                  (random-table/evaluate/table/roll
-                    (random-table/get-table reuse-table-name))))
-            (funcall (random-table-roller table) table))))
+                  (random-table/evaluate/table/roll-table
+		   (random-table/get-table reuse-table-name) roller-expression)))
+            (random-table/evaluate/table/roll-table table roller-expression))))
     (when-let ((stored-table-name (random-table-store table)))
       (puthash (random-table-name table) results random-table/storage/results))
     results))
+
+(defun random-table/evaluate/table/roll-table (table &optional roller-expression)
+  "Roll on the TABLE optionally using the given ROLLER-EXPRESSION.
+
+Or fallback to TABLE's roller slot."
+  (if roller-expression
+      (user-error "Cannot yet handle roller-expression")
+    (let ((roller (random-table-roller table)))
+      ;; (random-table/dice/roll (s-trim roller))
+      (cond
+       ((stringp roller) (user-error "Cannot yet handle roller that is string"))
+       ((functionp roller) (funcall roller table))
+       (t (user-error "Unknown roller %S" roller))))))
 
 ;;; Dice String Evaluator
 ;;
@@ -401,6 +432,58 @@ use those dice to lookup on other tables."
       (setq amount (+ amount 1 (random faces))))
     amount))
 
+(defvar random-table/roll/cache
+  nil
+  "A cache available during the life-cycle of `random-table/roll'.")
+
+(defvar random-table/prompt/registry
+  (make-hash-table)
+  "Stores the registry of prompts; as defined by `random-table/prompt/register'.")
+
+(cl-defun random-table/prompt/register (&key name type range default)
+  "Register a prompt with the given NAME.
+
+TYPE is either `read-number' or `completing-read'.  RANGE is an
+`alist'.  DEFAULT is the read function's default."
+  (puthash (intern name)
+    (let ((prompt (format "%s: " name)))
+    (cond
+      ((eq type #'read-number)
+        `(read-number ,prompt ,default))
+      ((eq type #'completing-read)
+        `(random-table/completing-read-alist ,prompt ,range nil t))
+      (t (user-error "Unknown type %s function for %s registry" type name))))
+    random-table/prompt/registry))
+
+(defun random-table/completing-read-alist (prompt alist &rest args)
+  "Like `completing-read' but PROMPT to find value in given ALIST.
+
+ARGS are passed to `completing-read'."
+  (alist-get (apply #'completing-read prompt alist args) alist nil nil #'string=))
+
+(cl-defun random-table/prompt (name &key type range default)
+  "Prompt for the given NAME.
+
+Re-use the cached prompted answer or use the
+`random-table/prompt/registry' to evaluate the prompt; then cache
+that result."
+  (if type
+      (puthash (intern name)
+	       (let ((prompt (format "%s: " name)))
+		 (cond
+		  ((eq type #'read-number)
+		   `(read-number ,prompt ,default))
+		  ((eq type #'completing-read)
+		   `(random-table/completing-read-alist ,prompt ,range nil t))
+		  (t (user-error "Unknown type %s function for %s registry" type name))))
+	       random-table/prompt/registry)
+    (let* ((key (intern (format "Prompt: %s" name)))
+           (value (or (and (hash-table-p random-table/roll/cache)
+			   (gethash key random-table/roll/cache))
+                      (apply (gethash (intern name) random-table/prompt/registry)))))
+      (puthash key value random-table/roll/cache)
+      value)))
+
 ;;;; Interactive
 ;;;###autoload
 (defun random-table/roll (text)
@@ -417,17 +500,22 @@ not be prompted to roll \"2d6\" dice, it rolls that.  In other
 words, giving dice expressions in text will not prompt you to
 roll them.
 
-We report that function via `random-table/reporter'."
+We report that function via `random-table/reporter'.
+
+With each invocation of `random-table/roll' we assign a new empty
+hash table to `random-table/roll/cache'."
   (interactive (list (completing-read "Expression: "
                        random-table/storage/tables
                        ;; Predicate that filters out non-private tables.
                        (lambda (name table &rest args)
                          (not (random-table-private table))))))
+  (setq random-table/roll/cache (make-hash-table))
   ;; TODO: Consider allowing custom reporter as a function.  We already
   ;; register it in the general case.
   (funcall random-table/reporter
     text
-    (random-table/roll/parse-text text)))
+    (random-table/roll/parse-text text))
+  (setq random-table/roll/cache nil))
 
 (provide 'random-table)
 ;;; random-table.el ends here

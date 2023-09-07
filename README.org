@@ -20,9 +20,36 @@ There are two primary functions:
 - Private Tables :: Useful when you don’t want to see the named table as an option in the =random-table/roll=; but you want to reference this table elsewhere.
 - Prompt for Dice Rolls :: Random tables can encode complex procedures, and sometimes you might want to follow the procedures but provide you’re own dice rolls.
 - Mad Libs Like Interpolation :: Instead of picking a table to roll on for =random-table/roll= you can type an expression (e.g. “There are ${2d6} orcs”) and it will interpret that results (e.g. rolling a 6 we’d have “There are 6 orcs”).
-- Custom “Reporter” :: By default, the results are written to the =*Messages*= buffer and added to the kill ring.  But you can configure to have a different reporter.  (see =random-table/reporter=)
+- Custom “Reporter” :: By default, the results are written to the =*Messages*= buffer and added to the kill ring.  But you can configure to have a different reporter.  (see =random-table/reporter=)  
+- Registering and Caching Prompt Choices :: During the life cycle of the =random-table/roll= you have access to the hash in the =random-table/roll/cache= variable.  Useful for remembering things you’ve already prompted the user for.
 
 And more.
+
+*** TODO A table specifices the roller to use on a sub-table.
+
+I have set aside ="${[Table One] + [Table Two]}"= to add (via numeric math) the results of table one and table two.  How might I pass a roller to
+
+Given that I'm passing rollers (as text), I may need to refactor the roller function to be a string.  ="${Table Name [2d6]}"=.
+
+*** TODO Compose Rollers and Prompts
+
+As of <2023-09-07 Thu> this is the means of writing a =:roller= that rolls dice and modifies based on a prompt.
+
+#+begin_src emacs-lisp
+    (random-table/register :name "Reaction Roll"
+			   :roller (lambda (table)
+				     (+ (random-table/prompt "Charisma Modifier")
+					(random-table/roller/2d6))))
+#+end_src
+
+Thinking through the interface, something along the following would be nice.  It would require that I change the roller to behave a bit more like the prompt.
+
+#+begin_src emacs-lisp
+    (random-table/register :name "Reaction Roll"
+			   :roller '(+ "2d6" "Charisma Modifier" ))
+#+end_src
+
+Based on the above interface, there’s little to distinguish between a dice and a prompt.  So that is something to consider.
 
 * Installation
 
@@ -368,3 +395,21 @@ The =${[Henchman > Morale Base] + [Henchman > Morale Variable]}= does the follow
 	   ((12 . 15) . 2)))
 #+end_src
 
+** Registering Prompts
+
+Similar to =random-table/roller=, you can register a prompt via =random-table/prompt=.  There are common prompts (e.g. “Charisma Modifier”).  In registering a prompt, during an invocation of =random-table/roll= each prompt will only be requested once.  That is to say, the package will cache the prompt’s response and re-use that through out the roll.
+
+This functionality leverages the per =random-table/roll= cache (as stored in the =random-table/roll/cache= variable).
+
+#+begin_src emacs-lisp
+  (random-table/prompt "Charisma Modifier"
+		       :type #'read-number
+		       :default 0)
+
+  (random-table/register :name "Reaction Roll"
+			 :roller (lambda (table)
+				   (+ (random-table/prompt "Charisma Modifier")
+				      (random-table/roller/2d6))))
+#+end_src
+
+Why include the caching?  In reviewing Kevin Crawford’s [Scarlet Heroes](https://www.drivethrurpg.com/product/127180/Scarlet-Heroes?affiliate_id=318171) there’s a table for reaction rolls that asks for a few modifiers, the rolls on one table, and one result is to roll on another table using those same modifiers.
