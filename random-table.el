@@ -251,22 +251,37 @@ When ROLL is not given, choose a random element from the TABLE."
       (nth (- index 1) data))
     (seq-random-elt data)))
 
-(defvar random-table/reporter
+(defcustom random-table/reporter
   #'random-table/reporter/as-kill-and-message
   "The function takes two positional parameters:
 
 - EXPRESSION :: The text to evaluate for \"rolling\"
 - RESULT :: The results of those rolls.
 
-See `random-table/reporter/as-kill-and-message'.")
+See `random-table/reporter/as-kill-and-message'."
+  :group 'random-table
+  :package-version '(random-table . "0.1.0")
+  :type '(choice
+          (const :tag "Kill and Message" random-table/reporter/as-kill-and-message)
+          (const :tag "Insert" random-table/reporter/as-insert)))
 
-(defun random-table/reporter/as-kill-and-message (expression result)
-  "Responsible for reporting the EXPRESSION and RESULT.
+(defun random-table/reporter/as-kill-and-message (expression results)
+  "Report RESULTS of EXPRESSION as `message' and `kill'.
 
 See `random-table/reporter'."
-  (let ((text (format "%s :: %s" expression result)))
+  (let ((text (format "%s :: %s" expression results)))
     (kill-new text)
     (message text)))
+
+(defun random-table/reporter/as-insert (expression results &optional buffer)
+  "Insert RESULTS of EXPRESSION into BUFFER.
+
+See `random-table/reporter'."
+  (with-current-buffer (or buffer (current-buffer))
+    (end-of-line)
+    (when (s-present? (s-trim notes))
+      (insert notes))
+    (insert (format "\n%s :: %s\n" expression results))))
 
 (defun random-table/roll/parse-text (text)
   "Roll the given TEXT.
