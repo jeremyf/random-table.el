@@ -154,7 +154,7 @@ found in the `random-table/stroage/tables' registry."
 
 (defvar random-table/storage/results
   (make-hash-table)
-  "An ephemeral storage for dice results of rolling for a table.
+  "An ephemeral storage for various results of rolling.
 
 As part of the rolling, we both add to and remove those stored
 values; that is to say functions are responsible for clean-up.
@@ -361,7 +361,6 @@ See `random-table' structure."
                    (funcall (random-table-fetcher table) data (-list filtered))
                    nil))
             (results (or (when row (random-table/roll/parse-text row)) "")))
-      (remhash (random-table-name table) random-table/storage/results)
       (setq random-table/current-roll nil)
       results)))
 
@@ -373,15 +372,21 @@ This function favors re-using and caching values.
 Why cache values?  Some tables you roll one set of dice and then
 use those dice to lookup on other tables."
   (let ((results
-          (or (when-let ((reuse-table-name (random-table-reuse table)))
-                (or
-                  (gethash (intern reuse-table-name) random-table/storage/results)
-                  (random-table/evaluate/table/roll-table
-		   (random-table/get-table reuse-table-name) roller-expression)))
-            (random-table/evaluate/table/roll-table table roller-expression))))
-    (when-let ((stored-table-name (random-table-store table)))
-      (puthash (random-table-name table) results random-table/storage/results))
+         (or (when-let ((reuse-table-name (random-table-reuse table)))
+               (or
+		(random-table/storage/results/get reuse-table-name)
+                (random-table/evaluate/table/roll-table
+		 (random-table/get-table reuse-table-name) roller-expressiion)))
+             (random-table/evaluate/table/roll-table table roller-expression))))
+    (when (random-table-store table)
+      (random-table/storage/results/put (random-table-name table) results))
     results))
+
+(defun random-table/storage/results/get (name)
+  (gethash (if (symbolp name) name (intern name)) random-table/storage/results))
+
+(defun random-table/storage/results/put (name value)
+  (puthash (if (symbolp name) name (intern name)) value random-table/storage/results))
 
 (defun random-table/evaluate/table/roll-table (table &optional roller-expression)
   "Roll on the TABLE optionally using the given ROLLER-EXPRESSION.
@@ -445,10 +450,6 @@ Or fallback to TABLE's roller slot."
       (setq amount (+ amount 1 (random faces))))
     amount))
 
-(defvar random-table/roll/cache
-  nil
-  "A cache available during the life-cycle of `random-table/roll'.")
-
 (defvar random-table/prompt/registry
   (make-hash-table)
   "Stores the registry of prompts; as defined by `random-table/prompt/register'.")
@@ -482,11 +483,9 @@ that result."
 		   `(random-table/completing-read-alist ,prompt ,range nil t))
 		  (t (user-error "Unknown type %s function for %s registry" type name))))
 	       random-table/prompt/registry)
-    (let* ((key (intern (format "Prompt: %s" name)))
-           (value (or (and (hash-table-p random-table/roll/cache)
-			   (gethash key random-table/roll/cache))
-                      (apply (gethash (intern name) random-table/prompt/registry)))))
-      (puthash key value random-table/roll/cache)
+    (let ((value (or (random-table/storage/results/get name)
+                     (apply (gethash (intern name) random-table/prompt/registry)))))
+      (random-table/storage/results/get name value)
       value)))
 
 ;;;; Interactive
@@ -508,19 +507,19 @@ roll them.
 We report that function via `random-table/reporter'.
 
 With each invocation of `random-table/roll' we assign a new empty
-hash table to `random-table/roll/cache'."
+hash table to `random-table/storage/results'."
   (interactive (list (completing-read "Expression: "
                        random-table/storage/tables
                        ;; Predicate that filters out non-private tables.
                        (lambda (name table &rest args)
                          (not (random-table-private table))))))
-  (setq random-table/roll/cache (make-hash-table))
+  (setq random-table/storage/results (make-hash-table))
   ;; TODO: Consider allowing custom reporter as a function.  We already
   ;; register it in the general case.
   (funcall random-table/reporter
     text
     (random-table/roll/parse-text text))
-  (setq random-table/roll/cache nil))
+  (setq random-table/storage/results nil))
 
 (provide 'random-table)
 ;;; random-table.el ends here
