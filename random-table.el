@@ -376,7 +376,7 @@ use those dice to lookup on other tables."
                (or
 		(random-table/storage/results/get reuse-table-name)
                 (random-table/evaluate/table/roll-table
-		 (random-table/get-table reuse-table-name) roller-expressiion)))
+		 (random-table/get-table reuse-table-name) roller-expression)))
              (random-table/evaluate/table/roll-table table roller-expression))))
     (when (random-table-store table)
       (random-table/storage/results/put (random-table-name table) results))
