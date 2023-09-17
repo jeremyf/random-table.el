@@ -262,8 +262,8 @@ See `random-table/reporter/as-kill-and-message'."
   :group 'random-table
   :package-version '(random-table . "0.1.0")
   :type '(choice
-          (const :tag "Kill and Message" random-table/reporter/as-kill-and-message)
-          (const :tag "Insert" random-table/reporter/as-insert)))
+          (function-item :tag "Kill and Message" random-table/reporter/as-kill-and-message)
+          (function-item :tag "Insert" random-table/reporter/as-insert)))
 
 (defun random-table/reporter/as-kill-and-message (expression results)
   "Report RESULTS of EXPRESSION as `message' and `kill'.
@@ -279,8 +279,6 @@ See `random-table/reporter'."
 See `random-table/reporter'."
   (with-current-buffer (or buffer (current-buffer))
     (end-of-line)
-    (when (s-present? (s-trim notes))
-      (insert notes))
     (insert (format "\n%s :: %s\n" expression results))))
 
 (defun random-table/roll/parse-text (text)
@@ -455,26 +453,16 @@ Or fallback to TABLE's roller slot."
   (make-hash-table)
   "Stores the registry of prompts; as defined by `random-table/prompt/register'.")
 
-(cl-defun random-table/prompt/register (&key name type range default)
-  "Register a prompt with the given NAME.
-
-TYPE is either `read-number' or `completing-read'.  RANGE is an
-`alist'.  DEFAULT is the read function's default."
-  (puthash (intern name)
-    (let ((prompt (format "%s: " name)))
-    (cond
-      ((eq type #'read-number)
-        `(read-number ,prompt ,default))
-      ((eq type #'completing-read)
-        `(random-table/completing-read-alist ,prompt ,range nil t))
-      (t (user-error "Unknown type %s function for %s registry" type name))))
-    random-table/prompt/registry))
-
 (defun random-table/completing-read-alist (prompt alist &rest args)
   "Like `completing-read' but PROMPT to find value in given ALIST.
 
 ARGS are passed to `completing-read'."
   (alist-get (apply #'completing-read prompt alist args) alist nil nil #'string=))
+
+(defun random-table/completing-read-integer-range (prompt range)
+  "Like `completing-read' but PROMPT to find integer value in RANGE."
+  (let ((strings (mapcar #'number-to-string range)))
+    (string-to-number (completing-read prompt strings nil t))))
 
 (cl-defun random-table/prompt (name &key type range default)
   "Prompt for the given NAME.
@@ -486,6 +474,8 @@ that result."
       (puthash (intern name)
 	       (let ((prompt (format "%s: " name)))
 		 (cond
+		  ((eq type 'bound-integer-range)
+		   `(random-table/completing-read-integer-range ,prompt ,range))
 		  ((eq type #'read-number)
 		   `(read-number ,prompt ,default))
 		  ((eq type #'completing-read)
