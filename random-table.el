@@ -336,8 +336,11 @@ WHen given ROLLER-EXPRESSION, use that instead of the table's roller."
      ((string-match random-table/roll/pass-roller-regex text)
       (let* ((table-name (match-string-no-properties 1 text))
 	     (roller-expression (match-string-no-properties 2 text)))
-	(funcall (random-table/roll/parse-text/replacer table-name roller-expression))))
-     ((and random-table/current-roll (string-match "current_roll" text))
+	(funcall (random-table/roll/parse-text/replacer
+		  table-name
+		  roller-expression))))
+     ((and random-table/current-roll
+	   (string-match "current_roll" text))
       random-table/current-roll)
      (t
       ;; Ensure that we have a dice expression
@@ -400,7 +403,8 @@ Or fallback to TABLE's roller slot."
     (let ((roller (random-table-roller table)))
       ;; (random-table/dice/roll (s-trim roller))
       (cond
-       ((stringp roller) (user-error "Cannot yet handle roller that is string"))
+       ((stringp roller)
+	(user-error "Cannot yet handle roller that is string"))
        ((functionp roller) (funcall roller table))
        (t (user-error "Unknown roller %S" roller))))))
 
@@ -429,10 +433,12 @@ Or fallback to TABLE's roller slot."
   (when (string-match
           random-table/dice/regex
           spec)
-    (list (random-table/dice/string-to-number (match-string 1 spec) 1)
-      (random-table/dice/string-to-number (match-string 2 spec)
-        6)
-      (random-table/dice/string-to-number (match-string 3 spec) 0))))
+    (list (random-table/dice/string-to-number
+	   (match-string 1 spec) 1)
+	  (random-table/dice/string-to-number
+	   (match-string 2 spec) 6)
+	  (random-table/dice/string-to-number
+	   (match-string 3 spec) 0))))
 
 (defun random-table/dice/string-to-number (spec default)
   "Convert the SPEC (and DEFAULT) into an integer."
@@ -455,13 +461,14 @@ Or fallback to TABLE's roller slot."
 
 (defvar random-table/prompt/registry
   (make-hash-table)
-  "Stores the registry of prompts; as defined by `random-table/prompt/register'.")
+  "Stores the prompts registered by `random-table/prompt/register'.")
 
 (defun random-table/completing-read-alist (prompt alist &rest args)
   "Like `completing-read' but PROMPT to find value in given ALIST.
 
 ARGS are passed to `completing-read'."
-  (alist-get (apply #'completing-read prompt alist args) alist nil nil #'string=))
+  (alist-get (apply #'completing-read prompt alist args)
+	     alist nil nil #'string=))
 
 (defun random-table/completing-read-integer-range (prompt range)
   "Like `completing-read' but PROMPT to find integer value in RANGE."
@@ -479,15 +486,20 @@ that result."
 	       (let ((prompt (format "%s: " name)))
 		 (cond
 		  ((eq type 'bound-integer-range)
-		   `(random-table/completing-read-integer-range ,prompt ,range))
+		   `(random-table/completing-read-integer-range
+		     ,prompt ,range))
 		  ((eq type #'read-number)
 		   `(read-number ,prompt ,default))
 		  ((eq type #'completing-read)
-		   `(random-table/completing-read-alist ,prompt ,range nil t))
-		  (t (user-error "Unknown type %s function for %s registry" type name))))
+		   `(random-table/completing-read-alist
+		     ,prompt ,range nil t))
+		  (t (user-error
+		      "Unknown type %s function for %s registry"
+		      type name))))
 	       random-table/prompt/registry)
     (let ((value (or (random-table/storage/results/get name)
-                     (apply (gethash (intern name) random-table/prompt/registry)))))
+                     (apply (gethash (intern name)
+				     random-table/prompt/registry)))))
       (random-table/storage/results/get name value)
       value)))
 
