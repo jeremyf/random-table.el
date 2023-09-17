@@ -383,10 +383,13 @@ use those dice to lookup on other tables."
     results))
 
 (defun random-table/storage/results/get (name)
-  (gethash (if (symbolp name) name (intern name)) random-table/storage/results))
+  (gethash (if (symbolp name) name (intern name))
+	   random-table/storage/results))
 
 (defun random-table/storage/results/put (name value)
-  (puthash (if (symbolp name) name (intern name)) value random-table/storage/results))
+  (puthash (if (symbolp name) name (intern name))
+	   value
+	   random-table/storage/results))
 
 (defun random-table/evaluate/table/roll-table (table &optional roller-expression)
   "Roll on the TABLE optionally using the given ROLLER-EXPRESSION.
