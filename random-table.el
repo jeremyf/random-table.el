@@ -505,7 +505,7 @@ that result."
   (gethash (intern name) random-table/prompt/registry))
 
 (defun random-table/prompt/put (name value)
-  (puthash (intern name) random-table/prompt/registry))
+  (puthash (intern name) value random-table/prompt/registry))
 
 ;;;; Interactive
 ;;;###autoload
