@@ -192,6 +192,17 @@ See `random-table/roller' macro."
                      faces (random-table-name table)))
       (+ 1 (random faces)))))
 
+(defun random-table/roller/interpolate-seq (seq)
+  "Interpolate given SEQ as roller."
+  (let ((func (car seq))
+        (rolls (mapcar (lambda (text)
+                         (let ((value (if (random-table/prompt/get text)
+                           (random-table/prompt text)
+                                        (random-table/roll/parse-text text))))
+                           (string-to-number (format "%s" value))))
+                 (cdr seq))))
+    (apply func rolls)))
+
 ;; Perhaps not ideal to have one function per roll type.  But...having a
 ;; consistent interface.
 ;;
