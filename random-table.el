@@ -523,6 +523,17 @@ that result."
 (defun random-table/prompt/put (name value)
   (puthash (intern name) value random-table/prompt/registry))
 
+(defun random-table/roll/test-all ()
+  "A convenience function to test all of the public `random-table' entries."
+  (maphash (lambda (key table)
+	     (unless (random-table-private table)
+	       (message "Testing %s table" key)
+	       ;; The test does not call these interactively, but the methods
+	       ;; assume a current-prefix-arg
+	       (let ((current-prefix-arg nil))
+		 (funcall #'random-table/roll (random-table-name table)))))
+	   random-table/storage/tables))
+
 ;;;; Interactive
 ;;;###autoload
 (defun random-table/roll (text)
