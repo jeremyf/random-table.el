@@ -78,7 +78,7 @@ The slots are:
   design, those list of strings can have interpolation
  (e.g. \"${2d6}\" both of dice structures but also of other
   tables.
-- :roller :: function to roll dice and return list of dice results.
+- :roller :: this is what we roll, see `random-table/roller/roll'
 - :filter :: function to filter the list of dice.
 - :fetcher :: function that takes two positional arguments (see
   `random-table/fetcher/default'.); it is used to fetch the correct entry
@@ -107,29 +107,26 @@ as whether there are unexpected events.  All from the same roll."
   (store nil)
   (reuse nil))
 
-(cl-defun random-table/register (&rest kws &key name roller data exclude-from-prompt &allow-other-keys)
+(cl-defun random-table/register (&rest kws &key name data exclude-from-prompt &allow-other-keys)
   "Store the DATA, NAME, and all given KWS in a `random-table'."
   ;; We need to guard for a reserved character; which we use for operations.
   (if (string-match-p "\\(\\[\\|\\]\\)" name)
-    (user-error (concat "Attempt to register \"%s\" table failed.  "
-                  "You cannot include the following characters: \"[\", \"]\".") name)
+      (user-error (concat "Attempt to register \"%s\" table failed.  "
+			  "You cannot include the following characters:"
+			  "\n\"[\", \"]\".")
+		  name)
     (let* ((key (intern name))
-            (struct (apply #'make-random-table
-                      :name key
-                      ;; When there's only one possible result, don't prompt the
-                      ;; user when they chose the "I'll roll my own dice"
-                      ;; option.
-		      :roller (cond
-			       ((functionp roller) roller)
-			       ;; Today I learned that (listp nil) is a list.
-			       ((eq nil roller) #'random-table/roller/default)
-			       ((listp roller) (lambda (table) (random-table/roller/interpolate-seq roller))))
-                      :exclude-from-prompt (or exclude-from-prompt
-                                             (= 1 (length (-list data))))
-                      :data (-list data) kws)))
+           (struct (apply #'make-random-table
+			  :name key
+			  ;; When there's only one possible result, don't prompt the
+			  ;; user when they chose the "I'll roll my own dice"
+			  ;; option.
+			  :exclude-from-prompt (or exclude-from-prompt
+						   (= 1 (length (-list data))))
+			  :data (-list data) kws)))
       (puthash key struct random-table/storage/tables))))
 
-(cl-defun random-table/get-table (value &key allow_nil)
+(cl-defun random-table/fetch (value &key allow_nil)
   "Coerce the given VALUE to a registered `random-table'.
 
 When the given VALUE cannot be found in the
@@ -174,7 +171,10 @@ The hash value is the contents of the table.")
 
 ;;; Random Table Roller
 (cl-defmacro random-table/roller (&rest body &key label &allow-other-keys)
-  "Create a LABEL named roller that \"rolls\" the BODY."
+  "Create a LABEL named roller that \"rolls\" the BODY.
+
+DEPRECATED!"
+  ;; (message "⚠ WARNING: I have deprecated `random-table/roller'; See README.org for updated approach.")
   (let ((roller (intern (concat "random-table/roller/" label)))
          (docstring (format "Roll %s on given TABLE" label)))
     `(defun ,roller (table)
@@ -184,6 +184,21 @@ The hash value is the contents of the table.")
          (read-number (format "Roll %s for %s: "
                         ,label (random-table-name table)))
          ,@body))))
+
+(defun random-table/roller/roll (table)
+  "Roll given TABLE's registered :roller.
+
+See `random-table'"
+  (if-let ((roller (random-table-roller table)))
+    (cond
+     ((functionp roller) (funcall roller table))
+     ((stringp roller) (random-table/roller/string roller))
+     ((seqp roller) (random-table/roller/seq roller))
+     (_ (user-error "Unable to handle %S roller for %s table"
+		    roller
+		    (random-table-name table))))
+    (user-error "Expected given %s to have roller; got nil"
+		(random-table-name table))))
 
 (defun random-table/roller/default (table)
   "Given the TABLE roll randomly on it.
@@ -197,15 +212,24 @@ See `random-table/roller' macro."
                      faces (random-table-name table)))
       (+ 1 (random faces)))))
 
-(defun random-table/roller/interpolate-seq (seq)
+(defun random-table/roller/string (text)
+  "Interpolate given TEXT as roller."
+  (if (string-match-p random-table/dice/regex text)
+      (if (current-prefix-arg)
+	  (read-number (format "Roll %s: " text))
+	(format "%s" (random-table/dice/roll (s-trim text))))
+    (random-table/roll/parse-text text)))
+
+(defun random-table/roller/seq (seq)
   "Interpolate given SEQ as roller."
   (let ((func (car seq))
-        (rolls (mapcar (lambda (text)
-                         (let ((value (if (random-table/prompt/get text)
-                           (random-table/prompt text)
-                                        (random-table/roll/parse-text text))))
-                           (string-to-number (format "%s" value))))
-                 (cdr seq))))
+        (rolls (mapcar
+		(lambda (text)
+                  (let ((value (if (random-table/prompt/get text)
+				   (random-table/prompt text)
+				 (random-table/roller/string text))))
+                    (string-to-number (format "%s" value))))
+                (cdr seq))))
     (apply func rolls)))
 
 ;; Perhaps not ideal to have one function per roll type.  But...having a
@@ -416,13 +440,7 @@ use those dice to lookup on other tables."
 Or fallback to TABLE's roller slot."
   (if roller-expression
       (user-error "Cannot yet handle roller-expression")
-    (let ((roller (random-table-roller table)))
-      ;; (random-table/dice/roll (s-trim roller))
-      (cond
-       ((stringp roller)
-	(user-error "Cannot yet handle roller that is string"))
-       ((functionp roller) (funcall roller table))
-       (t (user-error "Unknown roller %S" roller))))))
+    (random-table/roller/roll table)))
 
 ;;; Dice String Evaluator
 ;;
