@@ -301,7 +301,7 @@ See `random-table/reporter'."
   "Roll the given TEXT.
 
 Either by evaluating as a `random-table' or via `s-format'."
-  (if-let* ((table (random-table/get-table text :allow_nil t)))
+  (if-let* ((table (random-table/fetch text :allow_nil t)))
     (random-table/evaluate/table table)
     ;; We have specified a non-table; roll the text.  We'll treat a non-escaped
     ;; on as a dice text.
@@ -336,7 +336,7 @@ Either by evaluating as a `random-table' or via `s-format'."
 This is constructed as the replacer function of `s-format'.
 
 WHen given ROLLER-EXPRESSION, use that instead of the table's roller."
-  (if-let ((table (random-table/get-table text :allow_nil t)))
+  (if-let ((table (random-table/fetch text :allow_nil t)))
       (random-table/evaluate/table table roller-expression)
     (cond
      ((string-match random-table/roll/math-operation-regex text)
@@ -395,7 +395,7 @@ use those dice to lookup on other tables."
                (or
 		(random-table/storage/results/get reuse-table-name)
                 (random-table/evaluate/table/roll-table
-		 (random-table/get-table reuse-table-name) roller-expression)))
+		 (random-table/fetch reuse-table-name) roller-expression)))
              (random-table/evaluate/table/roll-table table roller-expression))))
     (when (random-table-store table)
       (random-table/storage/results/put (random-table-name table) results))
