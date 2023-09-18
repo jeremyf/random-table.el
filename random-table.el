@@ -107,7 +107,7 @@ as whether there are unexpected events.  All from the same roll."
   (store nil)
   (reuse nil))
 
-(cl-defun random-table/register (&rest kws &key name data exclude-from-prompt &allow-other-keys)
+(cl-defun random-table/register (&rest kws &key name roller data exclude-from-prompt &allow-other-keys)
   "Store the DATA, NAME, and all given KWS in a `random-table'."
   ;; We need to guard for a reserved character; which we use for operations.
   (if (string-match-p "\\(\\[\\|\\]\\)" name)
@@ -119,6 +119,11 @@ as whether there are unexpected events.  All from the same roll."
                       ;; When there's only one possible result, don't prompt the
                       ;; user when they chose the "I'll roll my own dice"
                       ;; option.
+		      :roller (cond
+			       ((functionp roller) roller)
+			       ;; Today I learned that (listp nil) is a list.
+			       ((eq nil roller) #'random-table/roller/default)
+			       ((listp roller) (lambda (table) (random-table/roller/interpolate-seq roller))))
                       :exclude-from-prompt (or exclude-from-prompt
                                              (= 1 (length (-list data))))
                       :data (-list data) kws)))
