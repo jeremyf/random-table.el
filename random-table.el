@@ -482,7 +482,7 @@ Re-use the cached prompted answer or use the
 `random-table/prompt/registry' to evaluate the prompt; then cache
 that result."
   (if type
-      (puthash (intern name)
+      (random-table/prompt/put name
 	       (let ((prompt (format "%s: " name)))
 		 (cond
 		  ((eq type 'bound-integer-range)
@@ -495,13 +495,17 @@ that result."
 		     ,prompt ,range nil t))
 		  (t (user-error
 		      "Unknown type %s function for %s registry"
-		      type name))))
-	       random-table/prompt/registry)
+		      type name)))))
     (let ((value (or (random-table/storage/results/get name)
-                     (apply (gethash (intern name)
-				     random-table/prompt/registry)))))
+                     (apply (random-table/prompt/get name)))))
       (random-table/storage/results/put name value)
       value)))
+
+(defun random-table/prompt/get (name)
+  (gethash (intern name) random-table/prompt/registry))
+
+(defun random-table/prompt/put (name value)
+  (puthash (intern name) random-table/prompt/registry))
 
 ;;;; Interactive
 ;;;###autoload
