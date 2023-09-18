@@ -500,7 +500,7 @@ that result."
     (let ((value (or (random-table/storage/results/get name)
                      (apply (gethash (intern name)
 				     random-table/prompt/registry)))))
-      (random-table/storage/results/get name value)
+      (random-table/storage/results/put name value)
       value)))
 
 ;;;; Interactive
