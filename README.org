@@ -8,10 +8,11 @@ You may also find [[https://github.com/jeremyf/dotemacs/blob/main/emacs.d/random
 
 * Introduction
 
-There are two primary functions:
+There are three primary functions:
 
 - =random-table/roll= :: An interactive function to select a table to roll on.
 - =random-table/register= :: A function for naming and defining the tables.
+- =random-table/prompt :: A function for naming and referencing different prompts.  i.e. For old school adventuring, when you roll a Reaction Roll, you want to prompt for the current “Charisma Modifier”.
 
 ** Features
 
@@ -96,7 +97,21 @@ In fact we could register a new table:
 
 When we “roll” on that table, when we get the “Coin and…” result, we’ll evaluate rolling on the Coin Toss table.  The end result is “Coin and it comes up Heads.”
 
+*** Custom Rollers
+
 We can also create ranges, but will need to consider the roller:
+
+#+begin_src emacs-lisp
+  (random-table/register :name "Reaction Roll"
+			 :roller "2d6"
+			 :data '(((2) . "Hostile")
+				 ((3 . 5) . "Unfriendly")
+				 ((6 . 8) . "Unsure")
+				 ((9 . 11) . "Amicable")
+				 ((12) . "Friendly")))
+#+end_src
+
+Alternatively we can use a function:
 
 #+begin_src emacs-lisp
   (random-table/register :name "Reaction Roll"
@@ -129,6 +144,26 @@ Let’s look at a more complicated example:
 #+end_src
 
 In the above case, when we roll the “Reaction Roll with Prompt”, Emacs will prompt for a Modifier.  We’ll then use the given modifier to adjust the dice roll.
+
+We could also use a registered prompt (see =random-table/prompt= docstring) and our roller could then be a sequence:
+
+#+begin_src emacs-lisp
+  (random-table/prompt "Charisma Bonus" :type #'read-number)
+
+  (random-table/register :name "Reaction Roll with Prompt"
+			 :roller '(+ "2d6" "Charisma Bonus")
+			 :data '(((-1000 . 2) . "Hostile")
+				 ((3 . 5) . "Unfriendly")
+				 ((6 . 8) . "Unsure")
+				 ((9 . 11) . "Amicable")
+				 ((12 . 2000) . "Friendly")))
+#+end_src
+
+The above will add the results of rolling “2d6” to the prompt for the character’s “Charisma Bonus.”
+
+As of <2023-09-18 Mon> , I am considering how I might represent/parse: ='(+ "2d6" (read-number "Charisma Bonus: "))=; I'm uncertain about that syntax compared to what I see as the more legible ='(+ "2d6" "Charisma Bonus")=; albeit with the need to create a prompt.
+
+*** Private Tables
 
 As you register tables, via =random-table/register=, you add them to the table registry.  The list of tables shown in the =M-x random-table/roll= can become quite lengthy.  To register a table, without adding it to the selection list, add =:private t= as one of the key word arguments.
 
@@ -413,3 +448,7 @@ This functionality leverages the per =random-table/roll= cache (as stored in the
 #+end_src
 
 Why include the caching?  In reviewing Kevin Crawford’s [Scarlet Heroes](https://www.drivethrurpg.com/product/127180/Scarlet-Heroes?affiliate_id=318171) there’s a table for reaction rolls that asks for a few modifiers, the rolls on one table, and one result is to roll on another table using those same modifiers.
+
+** Testing All of This
+
+I have added the non-interactive =random-table/roll/test-all= function; this will roll once on each of the registered non-private tables and report the results.  I've found it most useful when testing notable refactoring; namely how I handle the =:roller= slot for a =random-table=.
