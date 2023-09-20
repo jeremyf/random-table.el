@@ -464,15 +464,17 @@ Or fallback to TABLE's roller slot."
    - Adder
 
   e.g. \"1d6\" -> (1 6 0) or \"2d10+2\" -> (2 10 2)"
-  (when (string-match
-          random-table/dice/regex
-          spec)
-    (list (random-table/dice/string-to-number
-	   (match-string 1 spec) 1)
-	  (random-table/dice/string-to-number
-	   (match-string 2 spec) 6)
-	  (random-table/dice/string-to-number
-	   (match-string 3 spec) 0))))
+  (if (string= "d66" spec)
+      (+ (* 10 (+ 1 (random 6))) (+ 1 (random 6)))
+    (when (string-match
+           random-table/dice/regex
+           spec)
+      (list (random-table/dice/string-to-number
+	     (match-string 1 spec) 1)
+	    (random-table/dice/string-to-number
+	     (match-string 2 spec) 6)
+	    (random-table/dice/string-to-number
+	     (match-string 3 spec) 0)))))
 
 (defun random-table/dice/string-to-number (spec default)
   "Convert the SPEC (and DEFAULT) into an integer."
@@ -548,8 +550,7 @@ that result."
 	       (message "Testing %s table" key)
 	       ;; The test does not call these interactively, but the methods
 	       ;; assume a current-prefix-arg
-	       (let ((current-prefix-arg nil))
-		 (funcall #'random-table/roll (random-table-name table)))))
+	       (funcall #'random-table/roll (random-table-name table))))
 	   random-table/storage/tables))
 
 ;;;; Interactive
