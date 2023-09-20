@@ -12,7 +12,7 @@ There are three primary functions:
 
 - =random-table/roll= :: An interactive function to select a table to roll on.
 - =random-table/register= :: A function for naming and defining the tables.
-- =random-table/prompt :: A function for naming and referencing different prompts.  i.e. For old school adventuring, when you roll a Reaction Roll, you want to prompt for the current “Charisma Modifier”.
+- =random-table/prompt :: A function for naming and referencing different prompts.  i.e. For old school adventuring, when you roll a Reaction Roll, you want to prompt for the current “Charisma Modifier”.  
 
 ** Features
 
@@ -210,7 +210,9 @@ Given the composition of tables, we may also want to store the results of the ro
 			 :data '("One" "Two" "Three" "Four" "Five" "Six"))
 #+end_src
 
-As of [[date:2023-08-16][today]] I store the roll in a somewhat naive manner; for a table with =:store t=, when we “roll on that table” we add to a hash the table name and the results of the roll (e.g. the specific dice as a list).  Then until we’ve fully evaluated the roll for that table, we can reference the dice results for that table.
+As of 2023-08-16 I store the roll in a somewhat naive manner; for a table with =:store t=, when we “roll on that table” we add to a hash the table name and the results of the roll (e.g. the specific dice as a list).  Then until we’ve fully evaluated the roll for that table, we can reference the dice results for that table.
+
+On 2023-09-20, I added =random-table/storage/results/get-data-value=; this function can retrieve the resolved value of the stored roll.  Where =random-table/storage/results/get= retrieves the dice results (e.g. =1= from a “1d6” roll), the =random-table/storage/results/get-data-value= interprets the =1= on from the stored table’s =data= struct.
 
 One thing I introduced in the above was the =:fetcher= and =:filter= elements.  The =:filter= takes the dice pool (as a list) and returns an integer.  The =:fetcher= takes the integer and looks things up in the provided =:data=.
 

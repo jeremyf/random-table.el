@@ -399,7 +399,7 @@ See `random-table' structure."
     ;; replaced with the "${Current Roll for [My Tablename]}".  Then we can
     ;; Cache that rolled value and retrieve it.
     (setq random-table/current-roll rolled)
-    (let ((results (random-table/fetch-rolled table rolled)))
+    (let ((results (random-table/fetch-data-value table rolled)))
       (setq random-table/current-roll nil)
       results)))
 
@@ -413,19 +413,19 @@ use those dice to lookup on other tables."
   (let ((results
          (or (when-let ((reuse-table-name (random-table-reuse table)))
                (or
-		(random-table/storage/results/get reuse-table-name)
+		(random-table/storage/results/get-rolled-value reuse-table-name)
                 (random-table/evaluate/table/roll-table
 		 (random-table/fetch reuse-table-name) roller-expression)))
              (random-table/evaluate/table/roll-table table roller-expression))))
     (when (random-table-store table)
-      (random-table/storage/results/put (random-table-name table) results))
+      (random-table/storage/results/put-rolled-value (random-table-name table) results))
     results))
 
-(defun random-table/storage/results/get (name)
+(defun random-table/storage/results/get-rolled-value (name)
   (gethash (if (symbolp name) name (intern name))
 	   random-table/storage/results))
 
-(defun random-table/fetch-rolled (table rolled)
+(defun random-table/fetch-data-value (table rolled)
   "Fetch the ROLLED value from the TABLE's :data slot."
   (let* ((table (random-table/fetch table))
 	 (data (random-table-data table))
@@ -435,11 +435,11 @@ use those dice to lookup on other tables."
                 nil)))
     (or (when row (random-table/roll/parse-text row)) "")))
 
-(defun random-table/storage/results/fetch-rolled (table)
-  (random-table/fetch-rolled table
-			     (random-table/storage/results/get table)))
+(defun random-table/storage/results/get-data-value (table)
+  (random-table/fetch-data-value table
+			     (random-table/storage/results/get-rolled-value table)))
 
-(defun random-table/storage/results/put (name value)
+(defun random-table/storage/results/put-rolled-value (name value)
   (puthash (if (symbolp name) name (intern name))
 	   value
 	   random-table/storage/results))
@@ -542,9 +542,9 @@ that result."
 		  (t (user-error
 		      "Unknown type %s function for %s registry"
 		      type name)))))
-    (let ((value (or (random-table/storage/results/get name)
+    (let ((value (or (random-table/storage/results/get-rolled-value name)
                      (apply (random-table/prompt/get name)))))
-      (random-table/storage/results/put name value)
+      (random-table/storage/results/put-rolled-value name value)
       value)))
 
 (defun random-table/prompt/get (name)
