@@ -215,9 +215,9 @@ See `random-table/roller' macro."
 (defun random-table/roller/string (text)
   "Interpolate given TEXT as roller."
   (if (string-match-p random-table/dice/regex text)
-      (if (current-prefix-arg)
+      (if current-prefix-arg
 	  (read-number (format "Roll %s: " text))
-	(format "%s" (random-table/dice/roll (s-trim text))))
+	(string-to-number (format "%s" (random-table/dice/roll (s-trim text)))))
     (random-table/roll/parse-text text)))
 
 (defun random-table/roller/seq (seq)
