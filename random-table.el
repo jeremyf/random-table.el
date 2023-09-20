@@ -100,7 +100,9 @@ as whether there are unexpected events.  All from the same roll."
   name
   data
   (roller #'random-table/roller/default)
+  ;; TODO: Filter should take a table
   (filter #'random-table/filter/default)
+  ;; TODO: Fetcher should take a table
   (fetcher #'random-table/fetcher/default)
   (exclude-from-prompt nil)
   (private nil)
@@ -392,23 +394,17 @@ WHen given ROLLER-EXPRESSION, use that instead of the table's roller."
   "Evaluate the random TABLE, optionally using the given ROLLER-EXPRESSION.
 
 See `random-table' structure."
-  (let* ((data (random-table-data table))
-          (name (random-table-name table))
-          (rolled (random-table/evaluate/table/roll table roller-expression)))
+  (let* ((rolled (random-table/evaluate/table/roll table roller-expression)))
     ;; TODO: This is wildly naive.  Perhaps the current_roll needs to be
     ;; replaced with the "${Current Roll for [My Tablename]}".  Then we can
     ;; Cache that rolled value and retrieve it.
     (setq random-table/current-roll rolled)
-    (let* ((filtered (apply (random-table-filter table) (-list rolled)))
-            (row (if filtered
-                   (funcall (random-table-fetcher table) data (-list filtered))
-                   nil))
-            (results (or (when row (random-table/roll/parse-text row)) "")))
+    (let ((results (random-table/fetch-rolled table rolled)))
       (setq random-table/current-roll nil)
       results)))
 
 (defun random-table/evaluate/table/roll (table &optional roller-expression)
-  "Roll on the TABLE, conditionally using ROLLER-EXPRESSION
+  "Roll on the TABLE, conditionally using ROLLER-EXPRESSION.
 
 This function favors re-using and caching values.
 
@@ -428,6 +424,20 @@ use those dice to lookup on other tables."
 (defun random-table/storage/results/get (name)
   (gethash (if (symbolp name) name (intern name))
 	   random-table/storage/results))
+
+(defun random-table/fetch-rolled (table rolled)
+  "Fetch the ROLLED value from the TABLE's :data slot."
+  (let* ((table (random-table/fetch table))
+	 (data (random-table-data table))
+	 (filtered (apply (random-table-filter table) (-list rolled)))
+         (row (if filtered
+                  (funcall (random-table-fetcher table) data (-list filtered))
+                nil)))
+    (or (when row (random-table/roll/parse-text row)) "")))
+
+(defun random-table/storage/results/fetch-rolled (table)
+  (random-table/fetch-rolled table
+			     (random-table/storage/results/get table)))
 
 (defun random-table/storage/results/put (name value)
   (puthash (if (symbolp name) name (intern name))
