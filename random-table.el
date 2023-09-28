@@ -216,7 +216,7 @@ See `random-table/roller' macro."
 
 (defun random-table/roller/string (text)
   "Interpolate given TEXT as roller."
-  (if (string-match-p random-table/dice/regex text)
+  (if (or (string= "d66" (s-trim text)) (string-match-p random-table/dice/regex text))
       (if current-prefix-arg
 	  (read-number (format "Roll %s: " text))
 	(string-to-number (format "%s" (random-table/dice/roll (s-trim text)))))
@@ -460,8 +460,10 @@ Or fallback to TABLE's roller slot."
 ;; TODO Consider preserving the granular results (e.g. die one rolled a 4, etc)
 (defun random-table/dice/roll (spec-string)
   "Evaluate the given SPEC-STRING by parsing as a dice expression."
-  (apply #'random-table/dice/roll-spec
-    (random-table/dice/parse-spec spec-string)))
+  (if (string= "d66" spec-string)
+      (+ (* 10 (+ 1 (random 6))) (+ 1 (random 6)))
+    (apply #'random-table/dice/roll-spec
+	   (random-table/dice/parse-spec spec-string))))
 
 (defvar random-table/dice/regex
   "^\\([1-9][0-9]*\\)d\\([0-9]*\\)\\([+-][0-9]*\\)?")
@@ -474,17 +476,15 @@ Or fallback to TABLE's roller slot."
    - Adder
 
   e.g. \"1d6\" -> (1 6 0) or \"2d10+2\" -> (2 10 2)"
-  (if (string= "d66" spec)
-      (+ (* 10 (+ 1 (random 6))) (+ 1 (random 6)))
-    (when (string-match
-           random-table/dice/regex
-           spec)
-      (list (random-table/dice/string-to-number
-	     (match-string 1 spec) 1)
-	    (random-table/dice/string-to-number
-	     (match-string 2 spec) 6)
-	    (random-table/dice/string-to-number
-	     (match-string 3 spec) 0)))))
+  (when (string-match
+         random-table/dice/regex
+         spec)
+    (list (random-table/dice/string-to-number
+	   (match-string 1 spec) 1)
+	  (random-table/dice/string-to-number
+	   (match-string 2 spec) 6)
+	  (random-table/dice/string-to-number
+	   (match-string 3 spec) 0))))
 
 (defun random-table/dice/string-to-number (spec default)
   "Convert the SPEC (and DEFAULT) into an integer."
