@@ -6,6 +6,14 @@ I’ve been blogging about this in my [[https://takeonrules.com/series/emacs-ran
 
 You may also find [[https://github.com/jeremyf/dotemacs/blob/main/emacs.d/random-tables-data.el][my random-tables-data.el]] useful for what I’ve been setting up.
 
+* 2023-12-02 Update
+
+During [[https://emacsconf.org/2023/][Emacs Conf 2023]] I watched Howard Abrams’s presentation [[https://emacsconf.org/2023/talks/solo/][How I play TTRPGs in Emacs]].  And I suspect I’ll be migrating to that.  What I have works well, but there’s quite a bit I’m loving about what I saw.  In particular, having the tables be their own files creates several affordances.  Namely sharing those text-based files and repurposing plain-text.
+
+Also, if I’m going to spend effort on the functionality, I’d love to be collaborating.  So we’ll see.
+
+My plan is to start converting my tabular data to the plain text formats of the [[https://gitlab.com/howardabrams/emacs-rpgdm][emacs-rpgdm package]].
+
 * Introduction
 
 There are three primary functions:
