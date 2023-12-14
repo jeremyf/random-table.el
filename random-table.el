@@ -336,59 +336,83 @@ Either by evaluating as a `random-table' or via `s-format'."
         (s-format (if (string-match-p "\\${" text) text (format "${%s}" text))
           #'random-table/roll/parse-text/replacer)))))
 
-(defvar random-table/roll/math-operation-regex
-  "\\[\\(.*\\)\\][[:space:]]*\\(-\\|\\+\\|\\*\\)[[:space:]]*\\[\\(.*\\)\\]"
-
-  "A regular expression with three capture regions:
-
-- 1: left operand
-- 2: operator (e.g. \"+\", \"-\", \"*\")
-- 3. right operand")
-
-(defvar random-table/roll/pass-roller-regex
-  "\\([\\[+]\\)\\ \\[\\(.*\\)\\]"
-
-  "A regular expression with two capture regions:
-
-- 1: table name
-- 2: roller expression (e.g. \"2d6\")")
-
 (defvar random-table/current-roll
   nil)
+
+(defvar random-table/roll/parse-text/filter-functions
+  '(random-table/text-filter/inner-table
+    random-table/text-filter/math-operation
+    random-table/text-filter/table-with-custom-roller
+    random-table/text-filter/current_roll
+    random-table/text-filter/fallback)
+  "List of functions to sequentually filter TEXT.")
+
+(defun random-table/text-filter/inner-table (text)
+  "Conditionally replace inner-table for TEXT.
+
+Examples of inner-table are:
+
+- [dog/cat/horse]
+- [everything]"
+  (if (string-match "\\[\\([^\]]+\\)\\]" text)
+      (random-table/roll/parse-text/replacer
+       (seq-random-elt (s-split "/" (match-string-no-properties 1 text))))
+    text))
+
+(defun random-table/text-filter/math-operation (text)
+  "Conditionally replace math operation for TEXT.
+
+Examples of math operation:
+
+- [Henchman > Morale Base] + [Henchman > Morale Variable]"
+  (if (string-match "\\[\\(.*\\)\\][[:space:]]*\\(-\\|\\+\\|\\*\\)[[:space:]]*\\[\\(.*\\)\\]" text)
+      (let* ((left-operand (match-string-no-properties 1 text))
+             (operator (match-string-no-properties 2 text))
+             (right-operand (match-string-no-properties 3 text)))
+	;; TODO: Should we be passing the roller expression?
+	(funcall (intern operator)
+		 (string-to-number
+		  (random-table/roll/parse-text/replacer left-operand))
+		 (string-to-number
+		  (random-table/roll/parse-text/replacer right-operand))))
+    text))
+
+(defun random-table/text-filter/table-with-custom-roller (text)
+  "Conditionally replace math operation for TEXT.
+
+TODO What uses this?"
+  (if (string-match "\\([\\[+]\\)\\ \\[\\(.*\\)\\]" text)
+      (let* ((table-name (match-string-no-properties 1 text))
+	     (roller-expression (match-string-no-properties 2 text)))
+	(funcall (random-table/roll/parse-text/replacer table-name roller-expression)))
+    text))
+
+(defun random-table/text-filter/current_roll (text)
+  "Conditionally replace current-roll for TEXT.
+
+See `random-table/current-roll'."
+  (if (and random-table/current-roll (string-match "current_roll" text))
+      random-table/current-roll
+    text))
+
+(defun random-table/text-filter/fallback (text)
+  "Replace TEXT with dice expression"
+  (if (string-match-p random-table/dice/regex (s-trim text))
+      (format "%s" (random-table/dice/roll (s-trim text)))
+    text))
 
 (defun random-table/roll/parse-text/replacer (text &optional roller-expression)
   "Roll the TEXT; either from a table or as a dice-expression.
 
 This is constructed as the replacer function of `s-format'.
 
-WHen given ROLLER-EXPRESSION, use that instead of the table's roller."
+When given ROLLER-EXPRESSION, use that instead of the table's roller."
   (if-let ((table (random-table/fetch text :allow_nil t)))
       (random-table/evaluate/table table roller-expression)
-    (cond
-     ((string-match random-table/roll/math-operation-regex text)
-      (let* ((left-operand (match-string-no-properties 1 text))
-             (operator (match-string-no-properties 2 text))
-             (right-operand (match-string-no-properties 3 text)))
-	;; TODO: Should we be passing the roller expression?
-        (funcall (intern operator)
-		 (string-to-number
-		  (random-table/roll/parse-text/replacer left-operand))
-		 (string-to-number
-		  (random-table/roll/parse-text/replacer right-operand)))))
-     ((string-match random-table/roll/pass-roller-regex text)
-      (let* ((table-name (match-string-no-properties 1 text))
-	     (roller-expression (match-string-no-properties 2 text)))
-	(funcall (random-table/roll/parse-text/replacer
-		  table-name
-		  roller-expression))))
-     ((and random-table/current-roll
-	   (string-match "current_roll" text))
-      random-table/current-roll)
-     (t
-      ;; Ensure that we have a dice expression
-      (if (string-match-p random-table/dice/regex (s-trim text))
-          (format "%s" (random-table/dice/roll (s-trim text)))
-        text)))))
+    ;; TODO Consider registering a chain of parsers.
+    (cl-reduce (lambda (text el) (funcall el text))
+	       random-table/roll/parse-text/filter-functions
+	       :initial-value text)))
 
 (defun random-table/evaluate/table (table &optional roller-expression)
   "Evaluate the random TABLE, optionally using the given ROLLER-EXPRESSION.
