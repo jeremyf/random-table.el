@@ -4,7 +4,7 @@
 ;;
 ;; Copyright (C) 2023 Jeremy Friesen
 ;; Author: Jeremy Friesen <jeremy@jeremyfriesen.com>
-;; Version: 0.2
+;; Version: 0.3
 ;; Package-Requires: ((s "1.3") (emacs "29.1"))
 ;;
 ;;; License
@@ -301,20 +301,13 @@ Either by evaluating as a `random-table' or via `s-format'."
     (progn
       (let ((text (format "%s" text)))
         (s-format (if (string-match-p "\\${" text) text (format "${%s}" text))
-          #'random-table/roll/parse-text/replacer)))))
+          #'random-table/text-reduce)))))
 
 (defvar random-table/current-roll
   nil)
 
-(defvar random-table/roll/parse-text/filter-functions
-  '(random-table/text-filter/inner-table
-    random-table/text-filter/math-operation
-    random-table/text-filter/table-with-custom-roller
-    random-table/text-filter/current_roll
-    random-table/text-filter/fallback)
-  "List of functions to sequentually filter TEXT.")
 
-(defun random-table/text-filter/inner-table (text)
+(defun random-table/text-reducer-function/inner-table (text)
   "Conditionally replace inner-table for TEXT.
 
 Examples of inner-table are:
@@ -322,11 +315,11 @@ Examples of inner-table are:
 - [dog/cat/horse]
 - [everything]"
   (if (string-match "\\[\\([^\]]+\\)\\]" text)
-      (random-table/roll/parse-text/replacer
+      (random-table/text-reduce
        (seq-random-elt (s-split "/" (match-string-no-properties 1 text))))
     text))
 
-(defun random-table/text-filter/math-operation (text)
+(defun random-table/text-reducer-function/math-operation (text)
   "Conditionally replace math operation for TEXT.
 
 Examples of math operation:
@@ -339,22 +332,22 @@ Examples of math operation:
 	;; TODO: Should we be passing the roller expression?
 	(funcall (intern operator)
 		 (string-to-number
-		  (random-table/roll/parse-text/replacer left-operand))
+		  (random-table/text-reduce left-operand))
 		 (string-to-number
-		  (random-table/roll/parse-text/replacer right-operand))))
+		  (random-table/text-reduce right-operand))))
     text))
 
-(defun random-table/text-filter/table-with-custom-roller (text)
+(defun random-table/text-reducer-function/table-with-custom-roller (text)
   "Conditionally replace math operation for TEXT.
 
 TODO What uses this?"
   (if (string-match "\\([\\[+]\\)\\ \\[\\(.*\\)\\]" text)
       (let* ((table-name (match-string-no-properties 1 text))
 	     (roller-expression (match-string-no-properties 2 text)))
-	(funcall (random-table/roll/parse-text/replacer table-name roller-expression)))
+	(funcall (random-table/text-reduce table-name roller-expression)))
     text))
 
-(defun random-table/text-filter/current_roll (text)
+(defun random-table/text-reducer-function/current_roll (text)
   "Conditionally replace current-roll for TEXT.
 
 See `random-table/current-roll'."
@@ -362,13 +355,25 @@ See `random-table/current-roll'."
       random-table/current-roll
     text))
 
-(defun random-table/text-filter/fallback (text)
+(defun random-table/text-reducer-function/fallback (text)
   "Replace TEXT with dice expression"
   (if (string-match-p random-table/dice/regex (s-trim text))
       (format "%s" (random-table/dice/roll (s-trim text)))
     text))
 
-(defun random-table/roll/parse-text/replacer (text &optional roller-expression)
+(defvar random-table/text-reducer-functions
+  '(random-table/text-reducer-function/inner-table
+    random-table/text-reducer-function/math-operation
+    random-table/text-reducer-function/table-with-custom-roller
+    random-table/text-reducer-function/current_roll
+    random-table/text-reducer-function/fallback)
+  "List of functions to sequentually filter TEXT.
+
+The function must:
+- take one positional argument; a string
+- return a string.")
+
+(defun random-table/text-reduce (text &optional roller-expression)
   "Roll the TEXT; either from a table or as a dice-expression.
 
 This is constructed as the replacer function of `s-format'.
@@ -378,7 +383,7 @@ When given ROLLER-EXPRESSION, use that instead of the table's roller."
       (random-table/evaluate/table table roller-expression)
     ;; TODO Consider registering a chain of parsers.
     (cl-reduce (lambda (text el) (funcall el text))
-	       random-table/roll/parse-text/filter-functions
+	       random-table/text-reducer-functions
 	       :initial-value text)))
 
 (defun random-table/evaluate/table (table &optional roller-expression)
