@@ -36,8 +36,8 @@
 ;;
 ;; The `random-table/roll' is an `interactive' function that will prompt you to
 ;; select an expression.  You can choose from a list of registered public tables
-;; or provide your own text.  This package uses the `s-format' to parse the
-;; given expression.
+;; or provide your own text.  This package uses the
+;; `roll-table/roll/explode-text' to parse the given expression.
 ;;
 ;; The guts of the logic is `random-table/evaluate/table' namely how we:
 ;;
@@ -292,16 +292,18 @@ See `random-table/reporter'."
 (defun random-table/roll/parse-text (text)
   "Roll the given TEXT.
 
-Either by evaluating as a `random-table' or via `s-format'."
+Either by evaluating as a `random-table' or via `roll-table/roll/explode-text'."
   (let ((text (format "%s" text)))
-    (s-format (if (string-match-p "\\${" text) text (format "${%s}" text))
-              #'random-table/text-reduce)))
+    (roll-table/roll/explode-text
+     (if (string-match-p "\\${" text) text (format "${%s}" text))
+     #'random-table/text-reduce)))
+
 
 (defvar random-table/current-roll
   nil)
 
 
-(defun random-table/text-reducer-function/inner-table (text)
+(defun random-table/text-reducer-function/inner-table (text &rest _args)
   "Conditionally replace inner-table for TEXT.
 
 Examples of inner-table are:
@@ -313,7 +315,7 @@ Examples of inner-table are:
        (seq-random-elt (s-split "/" (match-string-no-properties 1 text))))
     text))
 
-(defun random-table/text-reducer-function/math-operation (text)
+(defun random-table/text-reducer-function/math-operation (text &rest _args)
   "Conditionally replace math operation for TEXT.
 
 Examples of math operation:
@@ -331,7 +333,7 @@ Examples of math operation:
 		  (random-table/text-reduce right-operand))))
     text))
 
-(defun random-table/text-reducer-function/table-with-custom-roller (text)
+(defun random-table/text-reducer-function/table-with-custom-roller (text &rest _args)
   "Conditionally replace math operation for TEXT.
 
 TODO What uses this?"
@@ -341,7 +343,7 @@ TODO What uses this?"
 	(funcall (random-table/text-reduce table-name roller-expression)))
     text))
 
-(defun random-table/text-reducer-function/current_roll (text)
+(defun random-table/text-reducer-function/current_roll (text &rest _args)
   "Conditionally replace current-roll for TEXT.
 
 See `random-table/current-roll'."
@@ -349,14 +351,15 @@ See `random-table/current-roll'."
       random-table/current-roll
     text))
 
-(defun random-table/text-reducer-function/fallback (text)
+(defun random-table/text-reducer-function/fallback (text &rest _args)
   "Replace TEXT with dice expression"
   (if (string-match-p random-table/dice/regex (s-trim text))
       (format "%s" (random-table/dice/roll (s-trim text)))
     text))
 
 (defvar random-table/text-reducer-functions
-  '(random-table/text-reducer-function/inner-table
+  '(random-table/text-reducer-function/named-table
+    random-table/text-reducer-function/inner-table
     random-table/text-reducer-function/math-operation
     random-table/text-reducer-function/table-with-custom-roller
     random-table/text-reducer-function/current_roll
@@ -367,18 +370,24 @@ The function must:
 - take one positional argument; a string
 - return a string.")
 
+(defun random-table/text-reducer-function/named-table (text &optional expression)
+  "Replace TEXT with roll on table.
+
+Optionally use the EXPRESSION for informing how we
+evaluate the table."
+  (if-let ((table (random-table/fetch text :allow_nil t)))
+      (random-table/evaluate/table table expression)
+    text))
+
 (defun random-table/text-reduce (text &optional roller-expression)
   "Roll the TEXT; either from a table or as a dice-expression.
 
-This is constructed as the replacer function of `s-format'.
+This is constructed as the replacer function of `roll-table/roll/explode-text'.
 
 When given ROLLER-EXPRESSION, use that instead of the table's roller."
-  (if-let ((table (random-table/fetch text :allow_nil t)))
-      (random-table/evaluate/table table roller-expression)
-    ;; TODO Consider registering a chain of parsers.
-    (cl-reduce (lambda (text el) (funcall el text))
-	       random-table/text-reducer-functions
-	       :initial-value text)))
+  (cl-reduce (lambda (text el) (funcall el text roller-expression))
+	     random-table/text-reducer-functions
+	     :initial-value text))
 
 (defun random-table/evaluate/table (table &optional roller-expression)
   "Evaluate the random TABLE, optionally using the given ROLLER-EXPRESSION.
@@ -585,6 +594,25 @@ hash table to `random-table/storage/results'."
     text
     (random-table/roll/parse-text text))
   (setq random-table/storage/results nil))
+
+(defun roll-table/roll/explode-text (text replacer)
+  "Given the TEXT explode on the matching format and call REPLACER on each."
+  (let ((saved-match-data (match-data)))
+    (unwind-protect
+        (replace-regexp-in-string
+         "\\$\\({\\([^}]+\\)}\\)"
+         (lambda (md)
+           (let ((var (match-string 2 md))
+                 (replacer-match-data (match-data)))
+             (unwind-protect
+		 ;; (set-match-data saved-match-data)
+                 (let ((v (funcall replacer var)))
+		   (if v (format "%s" v) (signal 's-format-resolve md)))
+           (set-match-data replacer-match-data))))
+         text
+         ;; Need literal to make sure it works
+         t t)
+      (set-match-data saved-match-data))))
 
 (provide 'random-table)
 ;;; random-table.el ends here
