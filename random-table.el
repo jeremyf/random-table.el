@@ -302,8 +302,8 @@ Either by evaluating as a `random-table' or via `roll-table/roll/explode-text'."
 (defvar random-table/current-roll
   nil)
 
-(defun roll-table/roll/explode-text (text replacer)
-  "Given the TEXT explode on the matching format and call REPLACER on each."
+(defun roll-table/roll/explode-text (template replacer &optional extra)
+  "Format TEMPLATE with the function REPLACER."
   (let ((saved-match-data (match-data)))
     (unwind-protect
         (replace-regexp-in-string
@@ -312,11 +312,14 @@ Either by evaluating as a `random-table' or via `roll-table/roll/explode-text'."
            (let ((var (match-string 2 md))
                  (replacer-match-data (match-data)))
              (unwind-protect
-		 ;; (set-match-data saved-match-data)
-                 (let ((v (funcall replacer var)))
-		   (if v (format "%s" v) (signal 's-format-resolve md)))
+                 (let ((v
+                        (cond
+                         (t
+                          (set-match-data saved-match-data)
+			  (funcall replacer var)))))
+                   (if v (format "%s" v) (signal 's-format-resolve md)))
                (set-match-data replacer-match-data))))
-         text
+         template
          ;; Need literal to make sure it works
          t t)
       (set-match-data saved-match-data))))
@@ -326,9 +329,10 @@ Either by evaluating as a `random-table' or via `roll-table/roll/explode-text'."
 
 Examples of inner-table are:
 
-- [dog/cat/horse]
-- [everything]"
-  (if (string-match "\\[\\([^\]]+\\)\\]" text)
+- [dog/cat/horse].
+
+- This skips over inner tables that have one element (e.g. [one])"
+  (if (string-match "\\[\\([^\]]+/[^\]]+\\)\\]" text)
       (random-table/text-reduce
        (seq-random-elt (s-split "/" (match-string-no-properties 1 text))))
     text))
