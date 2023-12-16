@@ -302,6 +302,24 @@ Either by evaluating as a `random-table' or via `roll-table/roll/explode-text'."
 (defvar random-table/current-roll
   nil)
 
+(defun roll-table/roll/explode-text (text replacer)
+  "Given the TEXT explode on the matching format and call REPLACER on each."
+  (let ((saved-match-data (match-data)))
+    (unwind-protect
+        (replace-regexp-in-string
+         "\\$\\({\\([^}]+\\)}\\)"
+         (lambda (md)
+           (let ((var (match-string 2 md))
+                 (replacer-match-data (match-data)))
+             (unwind-protect
+		 ;; (set-match-data saved-match-data)
+                 (let ((v (funcall replacer var)))
+		   (if v (format "%s" v) (signal 's-format-resolve md)))
+               (set-match-data replacer-match-data))))
+         text
+         ;; Need literal to make sure it works
+         t t)
+      (set-match-data saved-match-data))))
 
 (defun random-table/text-reducer-function/inner-table (text &rest _args)
   "Conditionally replace inner-table for TEXT.
@@ -594,25 +612,6 @@ hash table to `random-table/storage/results'."
     text
     (random-table/roll/parse-text text))
   (setq random-table/storage/results nil))
-
-(defun roll-table/roll/explode-text (text replacer)
-  "Given the TEXT explode on the matching format and call REPLACER on each."
-  (let ((saved-match-data (match-data)))
-    (unwind-protect
-        (replace-regexp-in-string
-         "\\$\\({\\([^}]+\\)}\\)"
-         (lambda (md)
-           (let ((var (match-string 2 md))
-                 (replacer-match-data (match-data)))
-             (unwind-protect
-		 ;; (set-match-data saved-match-data)
-                 (let ((v (funcall replacer var)))
-		   (if v (format "%s" v) (signal 's-format-resolve md)))
-           (set-match-data replacer-match-data))))
-         text
-         ;; Need literal to make sure it works
-         t t)
-      (set-match-data saved-match-data))))
 
 (provide 'random-table)
 ;;; random-table.el ends here
