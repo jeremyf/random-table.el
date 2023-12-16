@@ -78,7 +78,7 @@ The slots are:
   design, those list of strings can have interpolation
  (e.g. \"${2d6}\" both of dice structures but also of other
   tables.
-- :roller :: this is what we roll, see `random-table/roller/roll'
+- :roller :: this is what we roll, see `random-table/roll-on'
 - :filter :: function to filter the list of dice.
 - :fetcher :: function that takes two positional arguments (see
   `random-table/fetcher/default'.); it is used to fetch the correct entry
@@ -171,10 +171,10 @@ See `random-table' for discussion about storage and reuse.")
 The hash key is the \"human readable\" name of the table (as a symbol).
 The hash value is the contents of the table.")
 
-(defun random-table/roller/roll (table)
-  "Roll given TABLE's registered :roller.
+(defun random-table/roll-on (table)
+  "Roll the given TABLE's registered :roller.
 
-See `random-table'"
+See `random-table'."
   (if-let ((roller (random-table-roller table)))
     (cond
      ((functionp roller) (funcall roller table))
@@ -187,9 +187,7 @@ See `random-table'"
 		(random-table-name table))))
 
 (defun random-table/roller/default (table)
-  "Given the TABLE roll randomly on it.
-See `random-table/filter/default'.
-See `random-table/roller' macro."
+  "Randomly roll on the TABLE."
   ;; Constant off by one errors are likely
   (let ((faces (length (-list (random-table-data table)))))
     (if (and current-prefix-arg
@@ -199,7 +197,7 @@ See `random-table/roller' macro."
       (+ 1 (random faces)))))
 
 (defun random-table/roller/string (text)
-  "Interpolate given TEXT as roller."
+  "Interpolate given TEXT as a roller."
   (if (or (string= "d66" (s-trim text)) (string-match-p random-table/dice/regex text))
       (if current-prefix-arg
 	  (read-number (format "Roll %s: " text))
@@ -207,7 +205,7 @@ See `random-table/roller' macro."
     (random-table/roll/parse-text text)))
 
 (defun random-table/roller/seq (seq)
-  "Interpolate given SEQ as roller."
+  "Interpolate given SEQ as a roller."
   (let ((func (car seq))
         (rolls (mapcar
 		(lambda (text)
@@ -446,7 +444,7 @@ use those dice to lookup on other tables."
 Or fallback to TABLE's roller slot."
   (if roller-expression
       (user-error "Cannot yet handle roller-expression")
-    (random-table/roller/roll table)))
+    (random-table/roll-on table)))
 
 ;;; Dice String Evaluator
 ;;
