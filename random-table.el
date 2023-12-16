@@ -171,22 +171,6 @@ See `random-table' for discussion about storage and reuse.")
 The hash key is the \"human readable\" name of the table (as a symbol).
 The hash value is the contents of the table.")
 
-;;; Random Table Roller
-(cl-defmacro random-table/roller (&rest body &key label &allow-other-keys)
-  "Create a LABEL named roller that \"rolls\" the BODY.
-
-DEPRECATED!"
-  ;; (message "⚠ WARNING: I have deprecated `random-table/roller'; See README.org for updated approach.")
-  (let ((roller (intern (concat "random-table/roller/" label)))
-         (docstring (format "Roll %s on given TABLE" label)))
-    `(defun ,roller (table)
-       ,docstring
-       (if (and current-prefix-arg
-             (not (random-table-exclude-from-prompt table)))
-         (read-number (format "Roll %s for %s: "
-                        ,label (random-table-name table)))
-         ,@body))))
-
 (defun random-table/roller/roll (table)
   "Roll given TABLE's registered :roller.
 
@@ -233,23 +217,6 @@ See `random-table/roller' macro."
                     (string-to-number (format "%s" value))))
                 (cdr seq))))
     (apply func rolls)))
-
-;; Perhaps not ideal to have one function per roll type.  But...having a
-;; consistent interface.
-;;
-;; Notice these methods skip using the `random-table/dice/roll' method.  That
-;; method, by design does not prompt the user for rolls.
-(random-table/roller :label "1d2" (+ 1 (random 2)))
-(random-table/roller :label "1d3" (+ 1 (random 3)))
-(random-table/roller :label "1d4" (+ 1 (random 4)))
-(random-table/roller :label "1d5" (+ 1 (random 5)))
-(random-table/roller :label "1d6" (+ 1 (random 6)))
-(random-table/roller :label "2d6" (+ 2 (random 6) (random 6)))
-(random-table/roller :label "1d8" (+ 1 (random 8)))
-(random-table/roller :label "1d10" (+ 1 (random 10)))
-(random-table/roller :label "1d12" (+ 1 (random 12)))
-(random-table/roller :label "1d20" (+ 1 (random 20)))
-(random-table/roller :label "1d100" (+ 1 (random 100)))
 
 (defun random-table/filter/default (&rest rolls)
   "Filter the given ROLLS and return an integer.
