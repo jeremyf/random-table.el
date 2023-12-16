@@ -288,18 +288,14 @@ See `random-table/reporter'."
     (end-of-line)
     (insert (format "\n%s :: %s\n" expression results))))
 
+
 (defun random-table/roll/parse-text (text)
   "Roll the given TEXT.
 
 Either by evaluating as a `random-table' or via `s-format'."
-  (if-let* ((table (random-table/fetch text :allow_nil t)))
-    (random-table/evaluate/table table)
-    ;; We have specified a non-table; roll the text.  We'll treat a non-escaped
-    ;; on as a dice text.
-    (progn
-      (let ((text (format "%s" text)))
-        (s-format (if (string-match-p "\\${" text) text (format "${%s}" text))
-          #'random-table/text-reduce)))))
+  (let ((text (format "%s" text)))
+    (s-format (if (string-match-p "\\${" text) text (format "${%s}" text))
+              #'random-table/text-reduce)))
 
 (defvar random-table/current-roll
   nil)
