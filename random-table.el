@@ -353,7 +353,7 @@ This macro builds on the logic found in `s-format'"
 		(let ((capture-region-text-list
 		       ;; Zip the matching regions (excluding the entire match)
 		       (mapcar (lambda (i) (match-string i md))
-			       (number-sequence 1 (- (/ (length (match-data)) 2)
+			       (number-sequence 0 (- (/ (length (match-data)) 2)
 						     1))))
 		      (replacer-match-data (match-data)))
 		  (unwind-protect
@@ -377,7 +377,7 @@ Examples of inner-table are:
 This skips over inner tables that have one element (e.g. [one])."
  :name random-table/text-replacer-function/inner-table
  :regexp "\\[\\([^\]]+/[^\]]+\\)\\]"
- :replacer (lambda (inner-table)
+ :replacer (lambda (matching-text inner-table)
 	     (seq-random-elt (s-split "/" inner-table))))
 
 (random-table/create-text-replacer-function
@@ -386,7 +386,7 @@ Examples of math operation:
 - [Henchman > Morale Base] + [Henchman > Morale Variable]"
  :name random-table/text-replacer-function/math-operation
  :regexp "\\[\\(.*\\)\\][[:space:]]*\\(-\\|\\+\\|\\*\\)[[:space:]]*\\[\\(.*\\)\\]"
- :replacer (lambda (left-operand operator right-operand)
+ :replacer (lambda (matching-text left-operand operator right-operand)
 	     (format "%s" (funcall
 			   (intern operator)
 			   (string-to-number
@@ -399,36 +399,43 @@ Examples of math operation:
 
 See `random-table/current-roll'."
  :name random-table/text-replacer-function/current-roll
- :regexp "\\[\\(CURRENT_ROLL\\)\\]"
- :replacer (lambda (text)
-	     (or random-table/current-roll text)))
+ :regexp "{\\([[:space:]]*CURRENT_ROLL[[:space:]]*\\)}"
+ :replacer (lambda (matching-text current)
+	     (or random-table/current-roll matching-text)))
 
 (random-table/create-text-replacer-function
  "Conditionally replace dice-expression of TEXT."
  :name random-table/text-replacer-function/dice-expression
- :regexp "\\${\\([1-9][[:digit:]]*d[[:digit:]]+\\)[[:space:]]*\\([+-][0-9]+\\)?}"
- :replacer (lambda (dice &optional modifier)
+ :regexp "{\\([1-9][[:digit:]]*d[[:digit:]]+\\)[[:space:]]*\\([+-][0-9]+\\)?}"
+ :replacer (lambda (matching-text dice &optional modifier)
 	     (format "%s" (random-table/dice/roll (concat dice modifier)))))
 
 (random-table/create-text-replacer-function
- "Conditionally replace TEXT with roll on table."
+ "Conditionally replace TEXT with roll on table.
+
+The regexp will match the entire line and attempt a direct lookup
+on the tables."
  :name random-table/text-replacer-function/from-table-prompt
- :regexp "^\\([^})]+\\)$"
- :replacer (lambda (table-name)
+ :regexp "^\\(.+\\)$"
+ :replacer (lambda (matching-text table-name)
 	     (if-let ((table (random-table/fetch
 			      (s-trim table-name) :allow_nil t)))
 		 (random-table/evaluate/table table)
-	       text)))
+	       matching-text)))
 
 (random-table/create-text-replacer-function
- "Conditionally replace TEXT with roll on table."
+ "Conditionally replace TEXT with roll on table.
+
+Examples
+
+{Name (d2)}."
  :name random-table/text-replacer-function/named-table
- :regexp "\\${[[:space:]]?\\([^})]+\\)[[:space:]]*\\(([^)]+)\\)?[[:space:]]?}"
- :replacer (lambda (table-name &optional roller-expression)
+ :regexp "{[[:space:]]*\\([^})]+\\)[[:space:]]*\\(([^)]+)\\)?[[:space:]]*}"
+ :replacer (lambda (matching-text table-name &optional roller-expression)
 	     (if-let ((table (random-table/fetch
 			      (s-trim table-name) :allow_nil t)))
 		 (random-table/evaluate/table table roller-expression)
-	       (concat "${" table-name "}"))))
+	       matching-text)))
 
 (defun random-table/evaluate/table (table &optional roller-expression)
   "Evaluate the random TABLE, optionally using the given ROLLER-EXPRESSION.
