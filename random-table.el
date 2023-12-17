@@ -37,7 +37,7 @@
 ;; The `random-table/roll' is an `interactive' function that will prompt you to
 ;; select an expression.  You can choose from a list of registered public tables
 ;; or provide your own text.  This package uses the
-;; `roll-table/roll/explode-text' to parse the given expression.
+;; `roll-table/parse' to parse the given expression.
 ;;
 ;; The guts of the logic is `random-table/evaluate/table' namely how we:
 ;;
@@ -112,10 +112,10 @@ as whether there are unexpected events.  All from the same roll."
 (cl-defun random-table/register (&rest kws &key name data exclude-from-prompt &allow-other-keys)
   "Store the DATA, NAME, and all given KWS in a `random-table'."
   ;; We need to guard for a reserved character; which we use for operations.
-  (if (string-match-p "[{}\]\[)(/]" name)
+  (if (string-match-p "[{}\]\[)(/\+\-\*]" name)
       (user-error (concat "Attempt to register \"%s\" table failed.  "
 			  "You cannot include the following characters:  "
-			  "\"{\", \"}\", \"[\", \"]\", \"(\", \")\", \"/\".")
+			  "\"{\", \"}\", \"[\", \"]\", \"(\", \")\", \"/\", \"*\", \"-\", \"+\".")
 		  name)
     (let* ((key (intern name))
 	   (struct (apply #'make-random-table
@@ -174,10 +174,10 @@ The hash value is the contents of the table.")
 (defcustom random-table/text-replacer-functions
   '(random-table/text-replacer-function/current-roll
     random-table/text-replacer-function/dice-expression
-    random-table/text-replacer-function/from-table-prompt
+    random-table/text-replacer-function/from-interactive-prompt
     random-table/text-replacer-function/named-table
     random-table/text-replacer-function/inner-table
-    random-table/text-replacer-function/math-operation)
+    random-table/text-replacer-function/table-math)
   "Functions that each have one positional string parameter returning a string.
 
 The function is responsible for finding and replacing any matches
@@ -269,11 +269,11 @@ See `random-table/roller/default'."
 
 When ROLL is not given, choose a random element from the TABLE."
   (if-let ((index (if (integerp roll) roll (car roll))))
-      ;; Sniff out if the first element to see if we're dealing with a table that
-      ;; has ranges.
+      ;; Sniff out if the first element to see if we're dealing with a table
+      ;; that has ranges.
       (if (-cons-pair? (car data))
-	  ;; We have a cons-pair, meaning we have multiple rolls mapping to the same
-	  ;; result.
+	  ;; We have a cons-pair, meaning we have multiple rolls mapping to the
+	  ;; same result.
 	  (cdr (seq-find
 		(lambda (row)
 		  (if (-cons-pair? row)
@@ -326,7 +326,8 @@ See `random-table/reporter'."
 (defun random-table/parse (text)
   "Roll the given TEXT.
 
-Either by evaluating as a `random-table' or via `roll-table/roll/explode-text'."
+This is done by formatting the given text and passing it to each
+of the functions listed in `random-table/text-replacer-functions'."
   (let ((given-text (format "%s" text)))
     (cl-reduce (lambda (string el) (funcall el string))
 	       random-table/text-replacer-functions
@@ -335,9 +336,10 @@ Either by evaluating as a `random-table' or via `roll-table/roll/explode-text'."
 (cl-defmacro random-table/create-text-replacer-function (docstring &key name replacer regexp)
   "Create NAME function as a text REPLACER for REGEXP.
 
-- NAME: A symbol
-- REPLACER: A lambda with a number of args equal to the number of capture
-  regions of the REGEXP.
+- NAME: A symbol naming the replacer function.
+- REPLACER: A lambda with a number of args equal to one plus the number of
+            capture regions of the REGEXP.  The first parameter is the original
+            text, the rest are the capture regions of the REGEXP.
 - REGEXP: The regular expression to test against the given text.
 - DOCSTRING: The docstring for the newly created function.
 
@@ -351,7 +353,9 @@ This macro builds on the logic found in `s-format'"
 	      ,regexp
 	      (lambda (md)
 		(let ((capture-region-text-list
-		       ;; Zip the matching regions (excluding the entire match)
+		       ;; Convert the matched data results into a list, with the
+		       ;; `car' being the original text and the `cdr' being a
+		       ;; list of each capture region.
 		       (mapcar (lambda (i) (match-string i md))
 			       (number-sequence 0 (- (/ (length (match-data)) 2)
 						     1))))
@@ -371,9 +375,12 @@ This macro builds on the logic found in `s-format'"
 
 (random-table/create-text-replacer-function
  "Conditionally replace inner-table for TEXT.
+
 Examples of inner-table are:
-- [dog/cat/horse] (3 entries)
-- [hello world/good-bye mama jane] (2 entries)
+
+- \"[dog/cat/horse]\" (e.g. 3 entries)
+- \"[hello world/good-bye mama jane]\" (2 entries)
+
 This skips over inner tables that have one element (e.g. [one])."
  :name random-table/text-replacer-function/inner-table
  :regexp "\\[\\([^\]]+/[^\]]+\\)\\]"
@@ -381,21 +388,28 @@ This skips over inner tables that have one element (e.g. [one])."
 	     (seq-random-elt (s-split "/" inner-table))))
 
 (random-table/create-text-replacer-function
- "Conditionally replace math operation for TEXT.
+ "Conditionally perform math operation on table results for TEXT.
+
 Examples of math operation:
-- [Henchman > Morale Base] + [Henchman > Morale Variable]"
- :name random-table/text-replacer-function/math-operation
- :regexp "\\[\\(.*\\)\\][[:space:]]*\\(-\\|\\+\\|\\*\\)[[:space:]]*\\[\\(.*\\)\\]"
+
+- \"{(Henchman > Morale Base) + (Henchman > Morale Variable)}\""
+ :name random-table/text-replacer-function/table-math
+ :regexp "{(\\([^)]*\\))[[:space:]]*\\([\-+\*]\\)[[:space:]]*(\\([^)]*\\))}"
  :replacer (lambda (matching-text left-operand operator right-operand)
 	     (format "%s" (funcall
 			   (intern operator)
 			   (string-to-number
-			    (random-table/parse left-operand))
+			    (random-table/parse (s-trim left-operand)))
 			   (string-to-number
-			    (random-table/parse right-operand))))))
+			    (random-table/parse (s-trim right-operand)))))))
 
 (random-table/create-text-replacer-function
  "Conditionally replace TEXT with the current roll.
+
+Examples of current roll:
+
+- \"{ CURRENT_ROLL }\"
+- \"{CURRENT_ROLL}\"
 
 See `random-table/current-roll'."
  :name random-table/text-replacer-function/current-roll
@@ -404,9 +418,16 @@ See `random-table/current-roll'."
 	     (or random-table/current-roll matching-text)))
 
 (random-table/create-text-replacer-function
- "Conditionally replace dice-expression of TEXT."
+ "Conditionally replace dice-expression of TEXT.
+
+Examples:
+
+- \"{1d6}\"
+- \"{2d6 + 3}\"
+- \"{ d6+3 }\"
+"
  :name random-table/text-replacer-function/dice-expression
- :regexp "{\\([1-9][[:digit:]]*d[[:digit:]]+\\)[[:space:]]*\\([+-][0-9]+\\)?}"
+ :regexp "{\\[[:space:]]*([1-9][[:digit:]]*d[[:digit:]]+\\)[[:space:]]*\\([+-][0-9]+\\)?[[:space:]]*}"
  :replacer (lambda (matching-text dice &optional modifier)
 	     (format "%s" (random-table/dice/roll (concat dice modifier)))))
 
@@ -414,21 +435,25 @@ See `random-table/current-roll'."
  "Conditionally replace TEXT with roll on table.
 
 The regexp will match the entire line and attempt a direct lookup
-on the tables."
- :name random-table/text-replacer-function/from-table-prompt
+on the tables; failing that it will attempt to evaluate as a dice expression
+
+See `random-table/dice/regex' for matching dice expressions."
+ :name random-table/text-replacer-function/from-interactive-prompt
  :regexp "^\\(.+\\)$"
  :replacer (lambda (matching-text table-name)
 	     (if-let ((table (random-table/fetch
 			      (s-trim table-name) :allow_nil t)))
 		 (random-table/evaluate/table table)
-	       matching-text)))
+	       (if (string-match-p random-table/dice/regex (s-trim matching-text))
+		   (random-table/dice/roll (s-trim matching-text))
+		 matching-text))))
 
 (random-table/create-text-replacer-function
  "Conditionally replace TEXT with roll on table.
 
-Examples
+Examples:
 
-{Name (d2)}."
+- \"{Name (d2)}\"."
  :name random-table/text-replacer-function/named-table
  :regexp "{[[:space:]]*\\([^})]+\\)[[:space:]]*\\(([^)]+)\\)?[[:space:]]*}"
  :replacer (lambda (matching-text table-name &optional roller-expression)
