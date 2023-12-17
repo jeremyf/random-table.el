@@ -427,7 +427,7 @@ Examples:
 - \"{ d6+3 }\"
 "
  :name random-table/text-replacer-function/dice-expression
- :regexp "{\\[[:space:]]*([1-9][[:digit:]]*d[[:digit:]]+\\)[[:space:]]*\\([+-][0-9]+\\)?[[:space:]]*}"
+ :regexp "{[[:space:]]*\\([1-9][[:digit:]]*d[[:digit:]]+\\)[[:space:]]*\\([+-][0-9]+\\)?[[:space:]]*}"
  :replacer (lambda (matching-text dice &optional modifier)
 	     (format "%s" (random-table/dice/roll (concat dice modifier)))))
 
