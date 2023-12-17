@@ -530,14 +530,14 @@ Or fallback to TABLE's roller slot."
   (make-hash-table)
   "Stores the prompts registered by `random-table/prompt/register'.")
 
-(defun random-table/completing-read-alist (prompt alist &rest args)
+(defun random-table/completing-read/alist (prompt alist &rest args)
   "Like `completing-read' but PROMPT to find value in given ALIST.
 
 ARGS are passed to `completing-read'."
   (alist-get (apply #'completing-read prompt alist args)
 	     alist nil nil #'string=))
 
-(defun random-table/completing-read-integer-range (prompt range)
+(defun random-table/completing-read/integer-range (prompt range)
   "Like `completing-read' but PROMPT to find integer value in RANGE."
   (let ((strings (mapcar #'number-to-string range)))
     (string-to-number (completing-read prompt strings nil t))))
@@ -553,12 +553,12 @@ that result."
 	       (let ((prompt (format "%s: " name)))
 		 (cond
 		  ((eq type 'bound-integer-range)
-		   `(random-table/completing-read-integer-range
+		   `(random-table/completing-read/integer-range
 		     ,prompt ,range))
 		  ((eq type #'read-number)
 		   `(read-number ,prompt ,default))
 		  ((eq type #'completing-read)
-		   `(random-table/completing-read-alist
+		   `(random-table/completing-read/alist
 		     ,prompt ,range nil t))
 		  (t (user-error
 		      "Unknown type %s function for %s registry"
