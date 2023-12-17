@@ -164,6 +164,16 @@ As part of the rolling, we both add to and remove those stored
 values; that is to say functions are responsible for clean-up.
 See `random-table' for discussion about storage and reuse.")
 
+(defun random-table/storage/results/get-data-value (table)
+  (random-table/fetch-data-value
+   table
+   (random-table/storage/results/get-rolled-value table)))
+
+(defun random-table/storage/results/put-rolled-value (name value)
+  (puthash (if (symbolp name) name (intern name))
+	   value
+	   random-table/storage/results))
+
 (defvar random-table/storage/tables
   (make-hash-table)
   "A hash-table of random tables.
@@ -209,11 +219,14 @@ See `random-table/reporter/as-kill-and-message'."
 	  (function-item :tag "Insert"
 			 random-table/reporter/as-insert)))
 
-(defun random-table/roll-on (table)
-  "Roll the given TABLE's registered :roller.
+(defun random-table/roll-on (table &optional roller)
+  "Roll on the TABLE with the ROLLER.
+
+When no ROLLER is specified, use `random-table-roller' to find
+the configured roller.
 
 See `random-table'."
-  (if-let ((roller (random-table-roller table)))
+  (if-let ((roller (or roller (random-table-roller table))))
       (cond
        ((functionp roller) (funcall roller table))
        ((stringp roller) (random-table/roller/string roller))
@@ -455,18 +468,19 @@ Examples:
 
 - \"{Name (d2)}\"."
  :name random-table/text-replacer-function/named-table
- :regexp "{[[:space:]]*\\([^})]+\\)[[:space:]]*\\(([^)]+)\\)?[[:space:]]*}"
- :replacer (lambda (matching-text table-name &optional roller-expression)
+ :regexp "{[[:space:]]*\\([^})]+\\)[[:space:]]*\\((\\([^)]+\\))\\)?[[:space:]]*}"
+ :replacer (lambda (matching-text table-name &optional has-roller roller)
 	     (if-let ((table (random-table/fetch
 			      (s-trim table-name) :allow_nil t)))
-		 (random-table/evaluate/table table roller-expression)
+		 (random-table/parse
+		  (random-table/evaluate/table table roller))
 	       matching-text)))
 
-(defun random-table/evaluate/table (table &optional roller-expression)
-  "Evaluate the random TABLE, optionally using the given ROLLER-EXPRESSION.
+(defun random-table/evaluate/table (table &optional roller)
+  "Evaluate the random TABLE, optionally using the given ROLLER.
 
 See `random-table' structure."
-  (let* ((rolled (random-table/evaluate/table/roll table roller-expression)))
+  (let* ((rolled (random-table/evaluate/table/roll table roller)))
     ;; TODO: This is wildly naive.  Perhaps the current_roll needs to be
     ;; replaced with the "${Current Roll for [My Tablename]}".  Then we can
     ;; Cache that rolled value and retrieve it.
@@ -475,8 +489,8 @@ See `random-table' structure."
       (setq random-table/current-roll nil)
       results)))
 
-(defun random-table/evaluate/table/roll (table &optional roller-expression)
-  "Roll on the TABLE, conditionally using ROLLER-EXPRESSION.
+(defun random-table/evaluate/table/roll (table &optional roller)
+  "Roll on the TABLE, conditionally using ROLLER.
 
 This function favors re-using and caching values.
 
@@ -486,9 +500,9 @@ use those dice to lookup on other tables."
 	 (or (when-let ((reuse-table-name (random-table-reuse table)))
 	       (or
 		(random-table/storage/results/get-rolled-value reuse-table-name)
-		(random-table/evaluate/table/roll-table
-		 (random-table/fetch reuse-table-name) roller-expression)))
-	     (random-table/evaluate/table/roll-table table roller-expression))))
+		(random-table/roll-on
+		 (random-table/fetch reuse-table-name) roller)))
+	     (random-table/roll-on table roller))))
     (when (random-table-store table)
       (random-table/storage/results/put-rolled-value
        (random-table-name table) results))
@@ -508,39 +522,19 @@ use those dice to lookup on other tables."
 		nil)))
     (or (when row (random-table/parse row)) "")))
 
-(defun random-table/storage/results/get-data-value (table)
-  (random-table/fetch-data-value
-   table
-   (random-table/storage/results/get-rolled-value table)))
-
-(defun random-table/storage/results/put-rolled-value (name value)
-  (puthash (if (symbolp name) name (intern name))
-	   value
-	   random-table/storage/results))
-
-(defun random-table/evaluate/table/roll-table (table &optional roller-expression)
-  "Roll on the TABLE optionally using the given ROLLER-EXPRESSION.
-
-Or fallback to TABLE's roller slot."
-  (if roller-expression
-      (user-error "Cannot yet handle roller-expression")
-    (random-table/roll-on table)))
+(defvar random-table/dice/regex
+  "^\\([0-9]*\\)?d\\([0-9]*\\)\\([+-][0-9]*\\)?")
 
 ;;; Dice String Evaluator
 ;;
 ;; The following code (with the function name prefix of \"random-table/dice\"
 ;; is derived from Pelle Nilsson's decide.el package
-;;
-;; TODO Consider preserving the granular results (e.g. die one rolled a 4, etc)
 (defun random-table/dice/roll (spec-string)
   "Evaluate the given SPEC-STRING by parsing as a dice expression."
   (if (string= "d66" spec-string)
       (+ (* 10 (+ 1 (random 6))) (+ 1 (random 6)))
     (apply #'random-table/dice/roll-spec
 	   (random-table/dice/parse-spec spec-string))))
-
-(defvar random-table/dice/regex
-  "^\\([1-9][0-9]*\\)d\\([0-9]*\\)\\([+-][0-9]*\\)?")
 
 (defun random-table/dice/parse-spec (spec)
   "Convert SPEC to list:
@@ -551,7 +545,7 @@ Or fallback to TABLE's roller slot."
 
   e.g. \"1d6\" -> (1 6 0) or \"2d10+2\" -> (2 10 2)"
   (when (string-match
-	 random-table/dice/regex
+	 "^\\([0-9]*\\)?d\\([0-9]*\\)\\([+-][0-9]*\\)?"
 	 spec)
     (list (random-table/dice/string-to-number
 	   (match-string 1 spec) 1)
@@ -567,13 +561,13 @@ Or fallback to TABLE's roller slot."
 	     0)))
     (cond ((null spec) default)
 	  ((> n 0) n)
+	  ((string= "" spec) default)
 	  ((string= "+" spec) 0)
 	  ((string= "-" spec) 0)
 	  (t spec))))
 
 (defun random-table/dice/roll-spec (number-dice faces modifier)
   "Roll the NUMBER-DICE each with FACES number of sides and add MODIFIER."
-  ;; TODO Consider returning a list for further inspection.
   (let ((amount modifier))
     (dotimes (i number-dice)
       (setq amount (+ amount 1 (random faces))))
@@ -582,6 +576,12 @@ Or fallback to TABLE's roller slot."
 (defvar random-table/prompt/registry
   (make-hash-table)
   "Stores the prompts registered by `random-table/prompt/register'.")
+
+(defun random-table/prompt/get (name)
+  (gethash (intern name) random-table/prompt/registry))
+
+(defun random-table/prompt/put (name value)
+  (puthash (intern name) value random-table/prompt/registry))
 
 (defun random-table/completing-read/alist (prompt alist &rest args)
   "Like `completing-read' but PROMPT to find value in given ALIST.
@@ -620,12 +620,6 @@ that result."
 		     (apply (random-table/prompt/get name)))))
       (random-table/storage/results/put-rolled-value name value)
       value)))
-
-(defun random-table/prompt/get (name)
-  (gethash (intern name) random-table/prompt/registry))
-
-(defun random-table/prompt/put (name value)
-  (puthash (intern name) value random-table/prompt/registry))
 
 (defun random-table/roll/test-all ()
   "A convenience function to test all of the public `random-table' entries."
