@@ -173,11 +173,11 @@ The hash value is the contents of the table.")
 
 (defcustom random-table/text-replacer-functions
   '(random-table/text-replacer-function/current-roll
+    random-table/text-replacer-function/dice-expression
     random-table/text-replacer-function/from-table-prompt
     random-table/text-replacer-function/named-table
     random-table/text-replacer-function/inner-table
-    random-table/text-replacer-function/math-operation
-    random-table/text-replacer-function/fallback)
+    random-table/text-replacer-function/math-operation)
   "Functions that each have one positional string parameter returning a string.
 
 The function is responsible for finding and replacing any matches
@@ -247,7 +247,7 @@ See `random-table'."
       (if current-prefix-arg
 	  (read-number (format "Roll %s: " text))
 	(string-to-number (format "%s" (random-table/dice/roll (s-trim text)))))
-    (random-table/roll/parse-text text)))
+    (random-table/parse text)))
 
 (defun random-table/roller/seq (seq)
   "Interpolate given SEQ as a roller."
@@ -319,11 +319,11 @@ See `random-table/reporter'."
     (end-of-line)
     (insert (format "\n%s :: %s\n" expression results))))
 
-(defun random-table/roll/parse-text (text)
+(defun random-table/parse (text)
   "Roll the given TEXT.
 
 Either by evaluating as a `random-table' or via `roll-table/roll/explode-text'."
-  (let ((given-text (s-trim (format "%s" text))))
+  (let ((given-text (format "%s" text)))
     (cl-reduce (lambda (string el) (funcall el string))
 	       random-table/text-replacer-functions
 	       :initial-value given-text)))
@@ -386,23 +386,23 @@ Examples of math operation:
 	     (format "%s" (funcall
 			   (intern operator)
 			   (string-to-number
-			    (random-table/roll/parse-text left-operand))
+			    (random-table/parse left-operand))
 			   (string-to-number
-			    (random-table/roll/parse-text right-operand))))))
+			    (random-table/parse right-operand))))))
 
 (random-table/create-text-replacer-function
  "Conditionally replace TEXT with the current roll.
 
 See `random-table/current-roll'."
  :name random-table/text-replacer-function/current-roll
- :regexp "\\[\\(current_roll\\)\\]"
+ :regexp "\\[\\(CURRENT_ROLL\\)\\]"
  :replacer (lambda (text)
 	     (or random-table/current-roll text)))
 
 (random-table/create-text-replacer-function
- "Conditionally replace TEXT with table and custom roller."
- :name random-table/text-replacer-function/fallback
- :regexp "\\[\\([1-9][[:digit:]]*d[[:digit:]]+\\)[[:space:]]*\\([+-][0-9]+\\)?\\]"
+ "Conditionally replace dice-expression of TEXT."
+ :name random-table/text-replacer-function/dice-expression
+ :regexp "\\${\\([1-9][[:digit:]]*d[[:digit:]]+\\)[[:space:]]*\\([+-][0-9]+\\)?}"
  :replacer (lambda (dice &optional modifier)
 	     (format "%s" (random-table/dice/roll (concat dice modifier)))))
 
@@ -424,7 +424,7 @@ See `random-table/current-roll'."
 	     (if-let ((table (random-table/fetch
 			      (s-trim table-name) :allow_nil t)))
 		 (random-table/evaluate/table table roller-expression)
-	       text)))
+	       (concat "${" table-name "}"))))
 
 (defun random-table/evaluate/table (table &optional roller-expression)
   "Evaluate the random TABLE, optionally using the given ROLLER-EXPRESSION.
@@ -470,7 +470,7 @@ use those dice to lookup on other tables."
 	 (row (if filtered
 		  (funcall (random-table-fetcher table) data (-list filtered))
 		nil)))
-    (or (when row (random-table/roll/parse-text row)) "")))
+    (or (when row (random-table/parse row)) "")))
 
 (defun random-table/storage/results/get-data-value (table)
   (random-table/fetch-data-value
@@ -631,8 +631,25 @@ hash table to `random-table/storage/results'."
   ;; register it in the general case.
   (funcall random-table/reporter
 	   text
-	   (random-table/roll/parse-text text))
+	   (random-table/parse text))
   (setq random-table/storage/results nil))
+
+(defun random-table/roll-region ()
+  "Roll region or current line."
+  (interactive)
+  (let ((random-table/reporter #'random-table/reporter/as-kill-and-message))
+    (random-table/roll
+     (if (region-active-p)
+	 (buffer-substring-no-properties
+	  (region-beginning) (region-end))
+       (apply #'buffer-substring-no-properties
+	      (save-excursion
+		(goto-char (point-at-bol))
+		(skip-syntax-forward " " (point-at-eol))
+		(let ((beg (point)))
+		  (goto-char (point-at-eol))
+		  (skip-syntax-backward " " (point-at-bol))
+		  (list beg (point)))))))))
 
 (provide 'random-table)
 ;;; random-table.el ends here
