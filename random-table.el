@@ -297,11 +297,21 @@ When ROLL is not given, choose a random element from the TABLE."
 	(nth (- index 1) data))
     (seq-random-elt data)))
 
+(defvar random-table/reporter/format-function
+  (lambda (expression results) (format "- %s :: %s" expression results))
+  "The configured function takes two positional arguments:
+
+- expression :: the initial text provided `random-table/roll'
+- restults :: the transformed results by replacing the table declarations with
+              their rolled results.
+
+I structure my results in an `org-mode' definition list format.")
+
 (defun random-table/reporter/as-kill-and-message (expression results)
   "Report RESULTS of EXPRESSION as `message' and `kill'.
 
 See `random-table/reporter'."
-  (let ((text (format "%s :: %s" expression results)))
+  (let ((text (funcall random-table/reporter/format-function expression results)))
     (kill-new text)
     (message text)))
 
@@ -311,7 +321,7 @@ See `random-table/reporter'."
 See `random-table/reporter'."
   (with-current-buffer (or buffer (current-buffer))
     (end-of-line)
-    (insert (format "\n%s :: %s\n" expression results))))
+    (insert (funcall random-table/reporter/format-function expression results))))
 
 (defun random-table/parse (text)
   "Roll the given TEXT.
