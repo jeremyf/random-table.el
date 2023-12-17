@@ -112,10 +112,10 @@ as whether there are unexpected events.  All from the same roll."
 (cl-defun random-table/register (&rest kws &key name data exclude-from-prompt &allow-other-keys)
   "Store the DATA, NAME, and all given KWS in a `random-table'."
   ;; We need to guard for a reserved character; which we use for operations.
-  (if (string-match-p "\\(\\[\\|\\]\\)" name)
+  (if (string-match-p "[{}\]\[)(/]" name)
       (user-error (concat "Attempt to register \"%s\" table failed.  "
-			  "You cannot include the following characters:"
-			  "\n\"[\", \"]\".")
+			  "You cannot include the following characters:  "
+			  "\"{\", \"}\", \"[\", \"]\", \"(\", \")\", \"/\".")
 		  name)
     (let* ((key (intern name))
 	   (struct (apply #'make-random-table
@@ -188,12 +188,6 @@ functions."
   :group 'random-table
   :package-version '(random-table . "0.4.0")
   :type '(list :value-type (group function)))
-
-(defvar random-table/table-name/invalid-characters
-  '("[" "]" "{" "}" "/" "(" ")")
-  "Characters that should not be used as the name of a `random-table'.
-
-TODO: Implement this.")
 
 (defvar random-table/current-roll
   nil
