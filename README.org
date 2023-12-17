@@ -6,21 +6,16 @@ I’ve been blogging about this in my [[https://takeonrules.com/series/emacs-ran
 
 You may also find [[https://github.com/jeremyf/dotemacs/blob/main/emacs.d/random-tables-data.el][my random-tables-data.el]] useful for what I’ve been setting up.
 
-* 2023-12-02 Update
-
-During [[https://emacsconf.org/2023/][Emacs Conf 2023]] I watched Howard Abrams’s presentation [[https://emacsconf.org/2023/talks/solo/][How I play TTRPGs in Emacs]].  And I suspect I’ll be migrating to that.  What I have works well, but there’s quite a bit I’m loving about what I saw.  In particular, having the tables be their own files creates several affordances.  Namely sharing those text-based files and repurposing plain-text.
-
-Also, if I’m going to spend effort on the functionality, I’d love to be collaborating.  So we’ll see.
-
-My plan is to start converting my tabular data to the plain text formats of the [[https://gitlab.com/howardabrams/emacs-rpgdm][emacs-rpgdm package]].
-
 * Introduction
 
-There are three primary functions:
+There are four primary functions:
 
-- =random-table/roll= :: An interactive function to select a table to roll on.
+- =random-table/roll= :: An interactive function to select a table on which to roll.
 - =random-table/register= :: A function for naming and defining the tables.
-- =random-table/prompt :: A function for naming and referencing different prompts.  i.e. For old school adventuring, when you roll a Reaction Roll, you want to prompt for the current “Charisma Modifier”.  
+- random-table/prompt :: A function for naming and referencing different prompts.  i.e. For old school adventuring, when you roll a Reaction Roll, you want to prompt for the current “Charisma Modifier”.
+- =random-table/parse= :: This parses the provided text, thus allowing for composition of multiple tables.
+
+The heart of the parsing is done by iterating through the list of =random-table/text-replacer-functions=, sequentially calling each one and replacing text that matches the function.  The =random-table/create-text-replacer-function= provides assistance in composing one of these functions.
 
 ** Features
 
@@ -28,37 +23,13 @@ There are three primary functions:
 - Cached Results :: Some dice rolls inform later dice rolls.  There’s a mechanism to do that; though it likely needs improvement.
 - Private Tables :: Useful when you don’t want to see the named table as an option in the =random-table/roll=; but you want to reference this table elsewhere.
 - Prompt for Dice Rolls :: Random tables can encode complex procedures, and sometimes you might want to follow the procedures but provide you’re own dice rolls.
-- Mad Libs Like Interpolation :: Instead of picking a table to roll on for =random-table/roll= you can type an expression (e.g. “There are ${2d6} orcs”) and it will interpret that results (e.g. rolling a 6 we’d have “There are 6 orcs”).
+- Mad Libs Like Interpolation :: Instead of picking a table to roll on for =random-table/roll= you can type an expression (e.g. “There are {2d6} orcs”) and it will interpret that results (e.g. rolling a 6 we’d have “There are 6 orcs”).
+- Inner Tables :: Within a table’s result you can have an inner table (e.g. “you meet a [brigand/priest/child/zealot/haunting nightmare]”) and the parser will pick a random element.  
 - Custom “Reporter” :: By default, the results are written to the =*Messages*= buffer and added to the kill ring.  But you can configure to have a different reporter.  (see =random-table/reporter=)  
-- Registering and Caching Prompt Choices :: During the life cycle of the =random-table/roll= you have access to the hash in the =random-table/roll/cache= variable.  Useful for remembering things you’ve already prompted the user for.
+- Registering and Caching Prompt Choices :: During the life cycle of the =random-table/roll= you have access to the hash in the =random-table/roll/cache= variable.  Useful for remembering things you’ve already prompted the user for; such as their Charisma modifier.
+- Extensible Parsing Logic :: The =random-table/text-replacer-functions= is a custom variable that allows for adding and removing functions to provide more extensible logic.
 
 And more.
-
-*** TODO A table specifices the roller to use on a sub-table.
-
-I have set aside ="${[Table One] + [Table Two]}"= to add (via numeric math) the results of table one and table two.  How might I pass a roller to
-
-Given that I'm passing rollers (as text), I may need to refactor the roller function to be a string.  ="${Table Name [2d6]}"=.
-
-*** TODO Compose Rollers and Prompts
-
-As of <2023-09-07 Thu> this is the means of writing a =:roller= that rolls dice and modifies based on a prompt.
-
-#+begin_src emacs-lisp
-    (random-table/register :name "Reaction Roll"
-			   :roller (lambda (table)
-				     (+ (random-table/prompt "Charisma Modifier")
-					(random-table/roller/2d6))))
-#+end_src
-
-Thinking through the interface, something along the following would be nice.  It would require that I change the roller to behave a bit more like the prompt.
-
-#+begin_src emacs-lisp
-    (random-table/register :name "Reaction Roll"
-			   :roller '(+ "2d6" "Charisma Modifier" ))
-#+end_src
-
-Based on the above interface, there’s little to distinguish between a dice and a prompt.  So that is something to consider.
 
 * Installation
 
@@ -73,13 +44,15 @@ I have tested this using Emacs v29.1; it might work with earlier versions.
 
 ** Dependencies
 
-I make use of the ubiquitous =s= package (See https://melpa.org/#/s) (as of <2023-08-21 Mon> that is for =s-format= and =s-trim=).
+I make use of the ubiquitous =s= package (See https://melpa.org/#/s) (as of <2023-08-21 Mon> that is for =s-trim=).
 
-Originally, I relied on =org-d20= for dice rolling, but extracted the minimum viable logic for interpolating dice rolls (e.g. Evaluate “There are ${1d4} doors.” to roll one four-sided die and message the string “There are 3 doors.”)
+Originally, I relied on =org-d20= for dice rolling, but extracted the minimum viable logic for interpolating dice rolls (e.g. Evaluate “There are {1d4} doors.” to roll one four-sided die and message the string “There are 3 doors.”)
 
-* Defining Tables
+* Usage
 
-I type =M-x random-table/roll= and am prompted to give an Expression.  I can select from a pre-populated list of registered tables.  Or I can enter an expression, such as “2d6+1”.  =random-table/roll= will then evaluate the expression.
+** Defining Tables
+
+I type =M-x random-table/roll= and am prompted to give an Expression.  I can select from a pre-populated list of registered tables (via =random-table/register=).  Or I can enter an expression, such as “2d6+1” and =random-table/roll= will then evaluate the expression.
 
 Let’s look at registering a table:
 
@@ -88,9 +61,9 @@ Let’s look at registering a table:
 			 :data '("Heads" "Tails"))
 #+end_src
 
-When I invoke =random-table/roll=, I can select “Coin Toss”, it will add to the kill ring and write a message based on the roll; either “Heads” or “Tails”.[fn:3]
+When I invoke =random-table/roll=, I can select “Coin Toss”, it will add to the kill ring and write a message based on the roll; either “Heads” or “Tails”.
 
-I could also call =random-table/roll= and provide the following: “You toss a coin and it lands on ${Coin Toss}”
+I could also call =random-table/roll= and provide the following: “You toss a coin and it lands on {Coin Toss}”
 
 And will get back: “You toss a coin and it lands on Heads” (assuming you rolled a Heads).
 
@@ -100,12 +73,20 @@ In fact we could register a new table:
   (random-table/register :name "Things We Throw"
 			 :data '("Rocks"
 				 "Tantrum"
-				 "Coin and it comes up ${Coin Toss}."))
+				 "Coin and it comes up {Coin Toss}."))
 #+end_src
 
 When we “roll” on that table, when we get the “Coin and…” result, we’ll evaluate rolling on the Coin Toss table.  The end result is “Coin and it comes up Heads.”
 
-*** Custom Rollers
+** Replacement Functions
+
+In the above case the “Coin and it comes up {Coin Toss}.” replacement relies on the =random-table/text-replacer-functions=; in particular the =random-table/text-replacer-function/named-table=; which looks at the text between ={= and =}= and then uses the value between to lookup a registered table.
+
+** Inner Tables
+
+Instead of relying on a custom table for a coin toss, we could call =M-x random-table/roll= and provide “[heads/tails]”.  This syntax leverages the =random-table/text-replacer-function/inner-table= logic; that is interpret an inner table.  We take the text between =[= and =]= and pick one of the elements; elements are separated by a slash (e.g. =/=) character.
+
+** Custom Rollers
 
 We can also create ranges, but will need to consider the roller:
 
@@ -131,7 +112,7 @@ Alternatively we can use a function:
 				 ((12) . "Friendly")))
 #+end_src
 
-The given =:roller= is effectively 2d6.  And we use the rolled values to then find the correct entry in =:data=.  For example, when we roll a 4 we’d return “Unfriendly”.
+The given =:roller= is effectively two six-sided dice.  And we use the rolled values to then find the correct entry in =:data=.  For example, when we roll a 4 we’d return “Unfriendly”.
 
 The roller can also be a named function; something you can re-use.  This is also the place where you could prompt for a modifier or a choice.
 
@@ -171,7 +152,7 @@ The above will add the results of rolling “2d6” to the prompt for the charac
 
 As of <2023-09-18 Mon> , I am considering how I might represent/parse: ='(+ "2d6" (read-number "Charisma Bonus: "))=; I'm uncertain about that syntax compared to what I see as the more legible ='(+ "2d6" "Charisma Bonus")=; albeit with the need to create a prompt.
 
-*** Private Tables
+** Private Tables
 
 As you register tables, via =random-table/register=, you add them to the table registry.  The list of tables shown in the =M-x random-table/roll= can become quite lengthy.  To register a table, without adding it to the selection list, add =:private t= as one of the key word arguments.
 
@@ -179,13 +160,13 @@ Below is the “Name” table.  When we roll on the “Name” table we’ll pic
 
 #+begin_src emacs-lisp
   (random-table/register :name "Name"
-			 :data '("${Name > Male}" "${Name > Female}" "${Name > Non-Binary}"))
+			 :data '("{Name > Masculine}" "{Name > Feminine}" "{Name > Non-Binary}"))
 
-  (random-table/register :name "Name > Male"
+  (random-table/register :name "Name > Masculine"
 			 :private t
 			 :data '("George" "Michael"))
 
-  (random-table/register :name "Name > Female"
+  (random-table/register :name "Name > Feminine"
 			 :private t
 			 :data '("Mary" "Margaret"))
 
@@ -193,6 +174,8 @@ Below is the “Name” table.  When we roll on the “Name” table we’ll pic
 			 :private t
 			 :data '("Quin" "Ash"))
 #+end_src
+
+** Storing Results for Later Use
 
 Given the composition of tables, we may also want to store the results of the roll for future reference.  Why might we do this?  Some tables may say “Roll 3 dice.  Then on table one use the highest value.  And on table two use the lowest value.  And on table three, if there are doubles, use the number that is the “double”.
 
@@ -202,7 +185,7 @@ Given the composition of tables, we may also want to store the results of the ro
 			 ;; We include this so that we only return the first data element.  The
 			 ;; dice rolls are for the High Value and Low Value
 			 :fetcher (lambda (data roll) (car data))
-			 :data '("\n- High :: ${High Value}\n- Low :: ${Low Value}")
+			 :data '("\n- High :: {High Value}\n- Low :: {Low Value}")
 			 :store t)
 
   (random-table/register :name "High Value"
@@ -258,11 +241,11 @@ Here’s how I set about encoding that was as follows:
 #+begin_src emacs-lisp
   (random-table/register :name "Death and Dismemberment"
     :roller #'random-table/roller/prompt-from-table-data
-    :data '(("Physical" . "${Death and Dismemberment > Physical}")
-	     ("Acid/Fire" . "${Death and Dismemberment > Acid/Fire}")
-	     ("Eldritch" . "${Death and Dismemberment > Eldritch}")
-	     ("Lightning" . "${Death and Dismemberment > Lightning}")
-	     ("Non-Lethal" . "${Death and Dismemberment > Non-Lethal}")))
+    :data '(("Physical" . "{Death and Dismemberment > Physical}")
+	     ("Acid/Fire" . "{Death and Dismemberment > Acid/Fire}")
+	     ("Eldritch" . "{Death and Dismemberment > Eldritch}")
+	     ("Lightning" . "{Death and Dismemberment > Lightning}")
+	     ("Non-Lethal" . "{Death and Dismemberment > Non-Lethal}")))
 #+end_src
 
 The =:roller= is a function as follows:
@@ -294,9 +277,9 @@ This is a rather straight-forward table.  Let’s say the =:roller= returns a 5.
   (random-table/register :name "Death and Dismemberment > Physical > Head"
     :roller #'random-table/roller/death-and-dismemberment/damage
     :private t
-    :data '(((1 . 10) . "Head Injury; Rolled ${current_roll}\n- +1 Injury\n- Concussed for +${current_roll} day(s).")
-	     ((11 . 15) . "Head Injury; Rolled ${current_roll}\n- +1 Injury\n- Concussed for +${current_roll} day(s).\n- One Fatal Wound.\n- ${Save vs. Skullcracked}")
-	     ((16 . 1000) . "Head Injury; Rolled ${current_roll}\n- +1 Injury\n- Concussed for +${current_roll} day(s).\n- ${current_roll} - 14 Fatal Wounds.\n- ${Save vs. Skullcracked}")))
+    :data '(((1 . 10) . "Head Injury; Rolled {current_roll}\n- +1 Injury\n- Concussed for +{current_roll} day(s).")
+	     ((11 . 15) . "Head Injury; Rolled {current_roll}\n- +1 Injury\n- Concussed for +{current_roll} day(s).\n- One Fatal Wound.\n- {Save vs. Skullcracked}")
+	     ((16 . 1000) . "Head Injury; Rolled {current_roll}\n- +1 Injury\n- Concussed for +{current_roll} day(s).\n- {current_roll} - 14 Fatal Wounds.\n- {Save vs. Skullcracked}")))
 #+end_src
 
 The =:roller= (e.g. =random-table/roller/death-and-dismemberment/damage=) is as follows:
@@ -316,7 +299,7 @@ We roll a d12, add the number of existing injuries, and accumulated lethal damag
     :roller #'random-table/roller/saving-throw
     :private t
     :data '(("Save" . "Saved against cracked skull…gain a new scar.")
-	     ("Fail" . "Failed to save against cracked skull.  ${Save vs. Skullcracked > Failure}")))
+	     ("Fail" . "Failed to save against cracked skull.  {Save vs. Skullcracked > Failure}")))
 #+end_src
 
 The =:roller= (e.g. =random-table/roller/saving-throw=) will prompt for the saving throw score and any modifier to the roll.  Then it will return “Fail” or “Save” depending on the results.  See the function.
@@ -373,9 +356,11 @@ Let’s create a quick table:
 	     "Charisma"))
 #+end_src
 
-Given that I pass the universal prefix arg (e.g. =C-u=) when I roll on the =Random Attribute= table then I will get the prompt “Roll 1d6 for:” and the value I enter will be used for looking up the correct =:data= element.
+Given that I passed the universal prefix arg (e.g. =C-u=) when I roll on the =Random Attribute= table then I will get the prompt “Roll 1d6 for:” and the value I enter will be used for looking up the correct =:data= element.
 
-*** Exclude a Table from Prompting for a Roll
+In this way, you can roll the dice and use this package to encode the rules lookup.
+
+** Exclude a Table from Prompting for a Roll
 
 Any table that has one element in =:data= will not prompt for the roll.  Also, you can specify =:exclude-from-prompt t= when registering a table; then any “rolls” on that specific table will not prompt to give the dice value.
 
@@ -385,21 +370,21 @@ Ultimately, the goal is to ask for dice rolls when they might be something the p
 
 In my quest for more random tables and functionality, I worked through Errant’s Hiring Retainers section.  Using the PC’s presence, you look-up the morale base.  Then roll 2d6, modified by the offer’s generosity, to then determine the modifier to the morale base.
 
-To perform mathematical operations, I continue to leverage the =s-format= functionality.  That is =s-format= will evaluate and replace the text of the following format: =${text}=.
+To perform mathematical operations, I continue to leverage the =s-format= functionality.  That is =s-format= will evaluate and replace the text of the following format: ={text}=.
 
 Below is the definition of a random Henchman for Errant.
 
 #+begin_src emacs-lisp
   (random-table/register
    :name "Henchman (Errant)"
-   :data '("\n- Archetype :: ${Henchman > Archetype (Errant)}\n- Morale :: ${[Henchman > Morale Base] + [Henchman > Morale Variable]}"))
+   :data '("\n- Archetype :: {Henchman > Archetype}\n- Morale :: {(Henchman > Morale Base) + (Henchman > Morale Variable)}"))
 #+end_src
 
-The =${Henchman > Archetype (Errant)}= will look on the following table:
+The ={Henchman > Archetype (Errant)}= will look on the following table:
 
 #+begin_src emacs-lisp
     (random-table/register
-     :name "Henchman > Archetype (Errant)"
+     :name "Henchman > Archetype"
      :private t
      :roller #'random-table/roller/1d10
      :data '(((1 . 5) . "Warrior")
@@ -407,7 +392,7 @@ The =${Henchman > Archetype (Errant)}= will look on the following table:
 	     ((9 . 10) . "Magic User")))
 #+end_src
 
-The =${[Henchman > Morale Base] + [Henchman > Morale Variable]}= does the following:
+The ={[Henchman > Morale Base] + [Henchman > Morale Variable]}= does the following:
 
 - Roll on =Henchman > Morale Base=
 - Roll on =Henchman > Morale Variable=
@@ -462,3 +447,42 @@ Why include the caching?  In reviewing Kevin Crawford’s [Scarlet Heroes](https
 ** Testing All of This
 
 I have added the non-interactive =random-table/roll/test-all= function; this will roll once on each of the registered non-private tables and report the results.  I've found it most useful when testing notable refactoring; namely how I handle the =:roller= slot for a =random-table=.
+
+* Updates
+
+** 2023-12-02 Update
+
+During [[https://emacsconf.org/2023/][Emacs Conf 2023]] I watched Howard Abrams’s presentation [[https://emacsconf.org/2023/talks/solo/][How I play TTRPGs in Emacs]].  And I suspect I’ll be migrating to that.  What I have works well, but there’s quite a bit I’m loving about what I saw.  In particular, having the tables be their own files creates several affordances.  Namely sharing those text-based files and repurposing plain-text.
+
+Also, if I’m going to spend effort on the functionality, I’d love to be collaborating.  So we’ll see.
+
+My plan is to start converting my tabular data to the plain text formats of the [[https://gitlab.com/howardabrams/emacs-rpgdm][rpgdm package]].
+
+** 2023-12-17 Update
+
+I have looked at Howard Abram’s [[https://gitlab.com/howardabrams/emacs-rpgdm][rpgdm package]] and later [[https://codeberg.org/howardabrams/emacs-rpgtk/][rpgtk package]] for inspiration and adoption consideration.  However, I have settled on my current approach.  In part due to the feature comparisons:
+
+| Feature                                                                                                                    | RPGDM/RPGTK | random-tables |
+|----------------------------------------------------------------------------------------------------------------------------+-------------+---------------|
+| Automatic dice evaluation (e.g. “There are 2d6 giants” will always roll the 2d6)                                           | ✔           | -             |
+| Caching prompt choices; remembering the Charisma Modifier                                                                  | -           | ✔             |
+| Caching rolls for later reference                                                                                          | -           | ✔             |
+| Complex dice rollers  (e.g. 2d6 + Charisma Modifier + Situational Modifier)                                                | -           | ✔             |
+| Conditional dice evaluation (e.g. “2d6” in a table is not evaluated, but “{2d6}” is)                                       | -           | ✔             |
+| Custom reporter; configure how you report the results of a roll                                                            | -           | ✔             |
+| Evaluate text region and roll                                                                                              | -           | ✔             |
+| Evaluating dice within a result                                                                                            | ✔           | ✔             |
+| Extensible parser functions                                                                                                | -           | ✔             |
+| Inner tables (e.g. “You meet a [dragon/knight/peasant]”)                                                                   | ✔           | ✔             |
+| Lazy load tables                                                                                                           | ✔           | -             |
+| Load text tables (e.g. org-mode, plain text, markdown)                                                                     | ✔           | -             |
+| Mathematical operations of table results                                                                                   | -           | ✔             |
+| Multiline output (e.g. table results can include =\n=)                                                                       | -           | ✔             |
+| Private tables                                                                                                             | -           | ✔             |
+| Prompt for table evaluated as a “roll” (e.g. I can input “There are {2d6} [giants/frogmen/hermits]” into the table prompt) | -           | ✔             |
+| Prompting to provide own dice roll                                                                                         | -           | ✔             |
+| Results of a roll can then roll on more tables                                                                             | ✔           | ✔             |
+| Rolled dice overview; the results of each dice and the sum                                                                 | ✔           | -             |
+|----------------------------------------------------------------------------------------------------------------------------+-------------+---------------|
+
+I provide the above feature comparison not to diminish the excellent work of Howard, as both of his above packages provide other dice rolling adjacent functionality as well as allow for loading plain text data as a table; a feature that should not be discredited in it’s friendliness as well as greater shareability.

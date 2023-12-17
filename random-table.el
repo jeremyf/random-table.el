@@ -4,7 +4,7 @@
 ;;
 ;; Copyright (C) 2023 Jeremy Friesen
 ;; Author: Jeremy Friesen <jeremy@jeremyfriesen.com>
-;; Version: 0.4
+;; Version: 0.5
 ;; Package-Requires: ((s "1.3") (emacs "29.1"))
 ;;
 ;;; License
