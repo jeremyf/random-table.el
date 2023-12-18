@@ -187,13 +187,13 @@ The hash value is the contents of the table.")
     random-table/text-replacer-function/named-table
     random-table/text-replacer-function/inner-table
     random-table/text-replacer-function/table-math)
-  "Functions that each have one positional string parameter returning a string.
+  "Functions take on string parameter and return a string.
 
 The function is responsible for finding and replacing any matches
 within the text.
 
-See `random-table/create-text-replacer-function' macro for creating one of these
-functions."
+See `random-table/create-text-replacer-function' macro for
+creating one of these functions."
   :group 'random-table
   :package-version '(random-table . "0.4.0")
   :type '(list :value-type (group function)))
@@ -252,7 +252,8 @@ See `random-table'."
 	  (string-match-p random-table/dice/regex text))
       (if current-prefix-arg
 	  (read-number (format "Roll %s: " text))
-	(string-to-number (format "%s" (random-table/dice/roll (string-trim text)))))
+	(string-to-number
+	 (format "%s" (random-table/dice/roll (string-trim text)))))
     (random-table/parse text)))
 
 (defun random-table/roller/seq (seq)
