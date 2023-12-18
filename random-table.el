@@ -49,11 +49,11 @@
 ;;
 ;; Examples:
 ;; - (random-table/roll "2d6") will roll 2 six-sided dice.
-;; - (random-table/roll "There are ${2d6} orcs.") will roll 2 six-sided dice and
+;; - (random-table/roll "There are {2d6} orcs.") will roll 2 six-sided dice and
 ;;   output the sentence "There are 7 orcs."
 ;;
 ;; Tables can reference other tables, using the above string interpolation
-;; (e.g. "Roll on ${Your Table}" where "Your Table" is the name of a registered
+;; (e.g. "Roll on {Your Table}" where "Your Table" is the name of a registered
 ;; table.).  No considerations have been made to check for cyclical references,
 ;; you my dear human reader, must account for that.
 
