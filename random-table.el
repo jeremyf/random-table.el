@@ -475,7 +475,7 @@ See `random-table' structure."
     ;; replaced with the "${Current Roll for [My Tablename]}".  Then we can
     ;; Cache that rolled value and retrieve it.
     (setq random-table/current-roll rolled)
-    (let ((results (random-table/fetch-data-value table rolled)))
+    (let ((results (random-table/evaluate/table/fetch-rolled-value table rolled)))
       (setq random-table/current-roll nil)
       results)))
 
@@ -501,7 +501,7 @@ use those dice to lookup on other tables."
 (defun random-table/storage/results/get-rolled-value (name)
   (gethash name random-table/storage/results))
 
-(defun random-table/fetch-data-value (table rolled)
+(defun random-table/evaluate/table/fetch-rolled-value (table rolled)
   "Fetch the ROLLED value from the TABLE's :data slot."
   (let* ((table (random-table/fetch table))
 	 (data (random-table-data table))
