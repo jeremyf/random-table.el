@@ -116,16 +116,15 @@ as whether there are unexpected events.  All from the same roll."
 			  "You cannot include the following characters:  "
 			  "\"{\", \"}\", \"[\", \"]\", \"(\", \")\", \"/\", \"*\", \"-\", \"+\".")
 		  name)
-    (let* ((key (intern name))
-	   (struct (apply #'make-random-table
-			  :name key
+    (let* ((struct (apply #'make-random-table
+			  :name name
 			  ;; When there's only one possible result, don't prompt the
 			  ;; user when they chose the "I'll roll my own dice"
 			  ;; option.
 			  :exclude-from-prompt (or exclude-from-prompt
 						   (= 1 (length (-list data))))
 			  :data (-list data) kws)))
-      (puthash key struct random-table/storage/tables))))
+      (puthash name struct random-table/storage/tables))))
 
 (cl-defun random-table/fetch (value &key allow_nil)
   "Coerce the given VALUE to a registered `random-table'.
@@ -141,10 +140,8 @@ found in the `random-table/stroage/tables' registry."
   (if-let ((table (cond
 		   ((random-table-p value)
 		    value)
-		   ((symbolp value)
-		    (gethash value random-table/storage/tables))
 		   ((stringp value)
-		    (gethash (intern value) random-table/storage/tables))
+		    (gethash value random-table/storage/tables))
 		   ((integerp value)
 		    nil)
 		   (t
@@ -156,7 +153,7 @@ found in the `random-table/stroage/tables' registry."
       (error "Could not find table %s; use `random-table/register'" value))))
 
 (defvar random-table/storage/results
-  (make-hash-table)
+  (make-hash-table :test 'equal)
   "An ephemeral storage for various results of rolling.
 
 As part of the rolling, we both add to and remove those stored
@@ -169,12 +166,10 @@ See `random-table' for discussion about storage and reuse.")
    (random-table/storage/results/get-rolled-value table)))
 
 (defun random-table/storage/results/put-rolled-value (name value)
-  (puthash (if (symbolp name) name (intern name))
-	   value
-	   random-table/storage/results))
+  (puthash name value random-table/storage/results))
 
 (defvar random-table/storage/tables
-  (make-hash-table)
+  (make-hash-table :test 'equal)
   "A hash-table of random tables.
 
 The hash key is the \"human readable\" name of the table (as a symbol).
@@ -509,8 +504,7 @@ use those dice to lookup on other tables."
     results))
 
 (defun random-table/storage/results/get-rolled-value (name)
-  (gethash (if (symbolp name) name (intern name))
-	   random-table/storage/results))
+  (gethash name random-table/storage/results))
 
 (defun random-table/fetch-data-value (table rolled)
   "Fetch the ROLLED value from the TABLE's :data slot."
@@ -574,14 +568,14 @@ use those dice to lookup on other tables."
     amount))
 
 (defvar random-table/prompt/registry
-  (make-hash-table)
+  (make-hash-table :test 'equal)
   "Stores the prompts registered by `random-table/prompt/register'.")
 
 (defun random-table/prompt/get (name)
-  (gethash (intern name) random-table/prompt/registry))
+  (gethash name random-table/prompt/registry))
 
 (defun random-table/prompt/put (name value)
-  (puthash (intern name) value random-table/prompt/registry))
+  (puthash name value random-table/prompt/registry))
 
 (defun random-table/completing-read/alist (prompt alist &rest args)
   "Like `completing-read' but PROMPT to find value in given ALIST.
@@ -656,7 +650,7 @@ hash table to `random-table/storage/results'."
 				      ;; Predicate that filters out non-private tables.
 				      (lambda (name table &rest args)
 					(not (random-table-private table))))))
-  (setq random-table/storage/results (make-hash-table))
+  (setq random-table/storage/results (make-hash-table :test 'equal))
   ;; TODO: Consider allowing custom reporter as a function.  We already
   ;; register it in the general case.
   (let ((result (funcall random-table/reporter
