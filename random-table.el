@@ -160,11 +160,6 @@ As part of the rolling, we both add to and remove those stored
 values; that is to say functions are responsible for clean-up.
 See `random-table' for discussion about storage and reuse.")
 
-(defun random-table/storage/results/get-data-value (table)
-  (random-table/fetch-data-value
-   table
-   (random-table/storage/results/get-rolled-value table)))
-
 (defun random-table/storage/results/put-rolled-value (name value)
   (puthash name value random-table/storage/results))
 
