@@ -108,19 +108,21 @@ as whether there are unexpected events.  All from the same roll."
   (store nil)
   (reuse nil))
 
-(cl-defun random-table/register (&rest kws &key name data exclude-from-prompt &allow-other-keys)
+(cl-defun random-table/register
+    (&rest kws &key name data exclude-from-prompt &allow-other-keys)
   "Store the DATA, NAME, and all given KWS in a `random-table'."
   ;; We need to guard for a reserved character; which we use for operations.
   (if (string-match-p "[{}\]\[)(/\+\-\*]" name)
       (user-error (concat "Attempt to register \"%s\" table failed.  "
 			  "You cannot include the following characters:  "
-			  "\"{\", \"}\", \"[\", \"]\", \"(\", \")\", \"/\", \"*\", \"-\", \"+\".")
+			  "\"{\", \"}\", \"[\", \"]\", \"(\", \")\", \"/\", "
+			  "\"*\", \"-\", \"+\".")
 		  name)
     (let* ((struct (apply #'make-random-table
 			  :name name
-			  ;; When there's only one possible result, don't prompt the
-			  ;; user when they chose the "I'll roll my own dice"
-			  ;; option.
+			  ;; When there's only one possible result, don't prompt
+			  ;; the user when they chose the "I'll roll my own
+			  ;; dice" option.
 			  :exclude-from-prompt (or exclude-from-prompt
 						   (= 1 (length (-list data))))
 			  :data (-list data) kws)))
@@ -145,7 +147,8 @@ found in the `random-table/stroage/tables' registry."
 		   ((integerp value)
 		    nil)
 		   (t
-		    (error "Expected %s to be a `random-table', `symbol', `integer', or `string' got %s"
+		    (error (concat "Expected %s to be a `random-table', "
+				   "`symbol', `integer', or `string' got %s")
 			   value
 			   (type-of value))))))
       table
@@ -314,7 +317,8 @@ I structure my results in an `org-mode' definition list format.")
   "Report RESULTS of EXPRESSION as `message' and `kill'.
 
 See `random-table/reporter'."
-  (let ((text (funcall random-table/reporter/format-function expression results)))
+  (let ((text (funcall random-table/reporter/format-function
+		       expression results)))
     (kill-new text)
     (message text)))
 
@@ -324,7 +328,8 @@ See `random-table/reporter'."
 See `random-table/reporter'."
   (with-current-buffer (or buffer (current-buffer))
     (end-of-line)
-    (insert (funcall random-table/reporter/format-function expression results))))
+    (insert (funcall random-table/reporter/format-function
+		     expression results))))
 
 (defun random-table/parse (text)
   "Roll the given TEXT.
@@ -336,7 +341,8 @@ of the functions listed in `random-table/text-replacer-functions'."
 	       random-table/text-replacer-functions
 	       :initial-value given-text)))
 
-(cl-defmacro random-table/create-text-replacer-function (docstring &key name replacer regexp)
+(cl-defmacro random-table/create-text-replacer-function
+    (docstring &key name replacer regexp)
   "Create NAME function as a text REPLACER for REGEXP.
 
 - NAME: A symbol naming the replacer function.
@@ -397,14 +403,16 @@ Examples of math operation:
 
 - \"{(Henchman > Morale Base) + (Henchman > Morale Variable)}\""
  :name random-table/text-replacer-function/table-math
- :regexp "{(\\([^)]*\\))[[:space:]]*\\([\-+\*]\\)[[:space:]]*(\\([^)]*\\))}"
+ :regexp "{(\\([^)]*\\))\s*\\([\-+\*]\\)\s*(\\([^)]*\\))}"
  :replacer (lambda (matching-text left-operand operator right-operand)
 	     (format "%s" (funcall
 			   (intern operator)
 			   (string-to-number
-			    (random-table/parse (string-trim left-operand)))
+			    (random-table/parse
+			     (string-trim left-operand)))
 			   (string-to-number
-			    (random-table/parse (string-trim right-operand)))))))
+			    (random-table/parse
+			     (string-trim right-operand)))))))
 
 (random-table/create-text-replacer-function
  "Conditionally replace TEXT with the current roll.
@@ -416,7 +424,7 @@ Examples of current roll:
 
 See `random-table/current-roll'."
  :name random-table/text-replacer-function/current-roll
- :regexp "{\\([[:space:]]*CURRENT_ROLL[[:space:]]*\\)}"
+ :regexp "{\\(\s*CURRENT_ROLL\s*\\)}"
  :replacer (lambda (matching-text current)
 	     (or random-table/current-roll matching-text)))
 
@@ -430,7 +438,7 @@ Examples:
 - \"{ d6+3 }\"
 "
  :name random-table/text-replacer-function/dice-expression
- :regexp "{[[:space:]]*\\([1-9][[:digit:]]*d[[:digit:]]+\\)[[:space:]]*\\([+-][0-9]+\\)?[[:space:]]*}"
+ :regexp "{\s*\\([1-9][[:digit:]]*d[[:digit:]]+\\)\s*\\([+-][0-9]+\\)?\s*}"
  :replacer (lambda (matching-text dice &optional modifier)
 	     (format "%s" (random-table/dice/roll (concat dice modifier)))))
 
@@ -447,7 +455,8 @@ See `random-table/dice/regex' for matching dice expressions."
 	     (if-let ((table (random-table/fetch
 			      (string-trim table-name) :allow_nil t)))
 		 (random-table/evaluate/table table)
-	       (if (string-match-p random-table/dice/regex (string-trim matching-text))
+	       (if (string-match-p random-table/dice/regex
+				   (string-trim matching-text))
 		   (random-table/dice/roll (string-trim matching-text))
 		 matching-text))))
 
@@ -458,7 +467,7 @@ Examples:
 
 - \"{Name (d2)}\"."
  :name random-table/text-replacer-function/named-table
- :regexp "{[[:space:]]*\\([^})]+\\)[[:space:]]*\\((\\([^)]+\\))\\)?[[:space:]]*}"
+ :regexp "{\s*\\([^})]+\\)\s*\\((\\([^)]+\\))\\)?\s*}"
  :replacer (lambda (matching-text table-name &optional has-roller roller)
 	     (if-let ((table (random-table/fetch
 			      (string-trim table-name) :allow_nil t)))
@@ -475,7 +484,8 @@ See `random-table' structure."
     ;; replaced with the "${Current Roll for [My Tablename]}".  Then we can
     ;; Cache that rolled value and retrieve it.
     (setq random-table/current-roll rolled)
-    (let ((results (random-table/evaluate/table/fetch-rolled-value table rolled)))
+    (let ((results (random-table/evaluate/table/fetch-rolled-value
+		    table rolled)))
       (setq random-table/current-roll nil)
       results)))
 
@@ -642,7 +652,8 @@ With each invocation of `random-table/roll' we assign a new empty
 hash table to `random-table/storage/results'."
   (interactive (list (completing-read "Expression: "
 				      random-table/storage/tables
-				      ;; Predicate that filters out non-private tables.
+				      ;; Predicate that filters out non-private
+				      ;; tables.
 				      (lambda (name table &rest args)
 					(not (random-table-private table))))))
   (setq random-table/storage/results (make-hash-table :test 'equal))
