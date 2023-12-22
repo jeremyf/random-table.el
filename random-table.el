@@ -371,6 +371,57 @@ See `random-table' for discussion about storage and reuse.")
 (defun random-table/storage/results/get-rolled-value (name)
   (gethash name random-table/storage/results))
 
+(defvar random-table/dice/regex
+  "^\\([0-9]*\\)?d\\([0-9]*\\)\\([+-][0-9]*\\)?")
+
+;;; Dice String Evaluator
+;;
+;; The following code (with the function name prefix of \"random-table/dice\"
+;; is derived from Pelle Nilsson's decide.el package
+(defun random-table/dice/roll (spec-string)
+  "Evaluate the given SPEC-STRING by parsing as a dice expression."
+  (if (string= "d66" spec-string)
+      (+ (* 10 (+ 1 (random 6))) (+ 1 (random 6)))
+    (apply #'random-table/dice/roll-spec
+	   (random-table/dice/parse-spec spec-string))))
+
+(defun random-table/dice/parse-spec (spec)
+  "Convert SPEC to list:
+
+   - Number of dice
+   - Face
+   - Adder
+
+  e.g. \"1d6\" -> (1 6 0) or \"2d10+2\" -> (2 10 2)"
+  (when (string-match
+	 "^\\([0-9]*\\)?d\\([0-9]*\\)\\([+-][0-9]*\\)?"
+	 spec)
+    (list (random-table/dice/string-to-number
+	   (match-string 1 spec) 1)
+	  (random-table/dice/string-to-number
+	   (match-string 2 spec) 6)
+	  (random-table/dice/string-to-number
+	   (match-string 3 spec) 0))))
+
+(defun random-table/dice/string-to-number (spec default)
+  "Convert the SPEC (and DEFAULT) into an integer."
+  (let ((n (if (stringp spec)
+	       (string-to-number spec)
+	     0)))
+    (cond ((null spec) default)
+	  ((> n 0) n)
+	  ((string= "" spec) default)
+	  ((string= "+" spec) 0)
+	  ((string= "-" spec) 0)
+	  (t spec))))
+
+(defun random-table/dice/roll-spec (number-dice faces modifier)
+  "Roll the NUMBER-DICE each with FACES number of sides and add MODIFIER."
+  (let ((amount modifier))
+    (dotimes (i number-dice)
+      (setq amount (+ amount 1 (random faces))))
+    amount))
+
 (defcustom random-table/reporter
   #'random-table/reporter/as-kill-and-message
   "The function takes two positional parameters:
@@ -584,57 +635,6 @@ use those dice to lookup on other tables."
 		  (funcall (random-table-fetcher table) data (-list filtered))
 		nil)))
     (or (when row (random-table/parse row)) "")))
-
-(defvar random-table/dice/regex
-  "^\\([0-9]*\\)?d\\([0-9]*\\)\\([+-][0-9]*\\)?")
-
-;;; Dice String Evaluator
-;;
-;; The following code (with the function name prefix of \"random-table/dice\"
-;; is derived from Pelle Nilsson's decide.el package
-(defun random-table/dice/roll (spec-string)
-  "Evaluate the given SPEC-STRING by parsing as a dice expression."
-  (if (string= "d66" spec-string)
-      (+ (* 10 (+ 1 (random 6))) (+ 1 (random 6)))
-    (apply #'random-table/dice/roll-spec
-	   (random-table/dice/parse-spec spec-string))))
-
-(defun random-table/dice/parse-spec (spec)
-  "Convert SPEC to list:
-
-   - Number of dice
-   - Face
-   - Adder
-
-  e.g. \"1d6\" -> (1 6 0) or \"2d10+2\" -> (2 10 2)"
-  (when (string-match
-	 "^\\([0-9]*\\)?d\\([0-9]*\\)\\([+-][0-9]*\\)?"
-	 spec)
-    (list (random-table/dice/string-to-number
-	   (match-string 1 spec) 1)
-	  (random-table/dice/string-to-number
-	   (match-string 2 spec) 6)
-	  (random-table/dice/string-to-number
-	   (match-string 3 spec) 0))))
-
-(defun random-table/dice/string-to-number (spec default)
-  "Convert the SPEC (and DEFAULT) into an integer."
-  (let ((n (if (stringp spec)
-	       (string-to-number spec)
-	     0)))
-    (cond ((null spec) default)
-	  ((> n 0) n)
-	  ((string= "" spec) default)
-	  ((string= "+" spec) 0)
-	  ((string= "-" spec) 0)
-	  (t spec))))
-
-(defun random-table/dice/roll-spec (number-dice faces modifier)
-  "Roll the NUMBER-DICE each with FACES number of sides and add MODIFIER."
-  (let ((amount modifier))
-    (dotimes (i number-dice)
-      (setq amount (+ amount 1 (random faces))))
-    amount))
 
 (defun random-table/completing-read/alist (prompt alist &rest args)
   "Like `completing-read' but PROMPT to find value in given ALIST.

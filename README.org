@@ -16,6 +16,441 @@ You may also find [[https://github.com/jeremyf/dotemacs/blob/main/emacs.d/random
 
 * Introduction
 
+** Features
+
+- Composing Tables :: The results of one table could be to roll on another table or tables; and so on.
+- Cached Results :: Some dice rolls inform later dice rolls.  There’s a mechanism to do that; though it likely needs improvement.
+- Private Tables :: Useful when you don’t want to see the named table as an option in the =random-table/roll=; but you want to reference this table elsewhere.
+- Prompt for Dice Rolls :: Random tables can encode complex procedures, and sometimes you might want to follow the procedures but provide you’re own dice rolls.
+- Mad Libs Like Interpolation :: Instead of picking a table to roll on for =random-table/roll= you can type an expression (e.g. “There are {2d6} orcs”) and it will interpret that results (e.g. rolling a 6 we’d have “There are 6 orcs”).
+- Inner Tables :: Within a table’s result you can have an inner table (e.g. “you meet a [brigand/priest/child/zealot/haunting nightmare]”) and the parser will pick a random element.  
+- Custom “Reporter” :: By default, the results are written to the =*Messages*= buffer and added to the kill ring.  But you can configure to have a different reporter.  (see =random-table/reporter=)  
+- Registering and Caching Prompt Choices :: During the life cycle of the =random-table/roll= you have access to the hash in the =random-table/roll/cache= variable.  Useful for remembering things you’ve already prompted the user for; such as their Charisma modifier.
+- Extensible Parsing Logic :: The =random-table/text-replacer-functions= is a custom variable that allows for adding and removing functions to provide more extensible logic.
+
+And more.
+
+** Installation
+
+As of <2023-08-21 Mon> this repository is not yet part of any of the package archive (e.g. https://melpa.org).  But you can install it via =use-package=.
+
+#+begin_src emacs-lisp
+  (use-package random-table
+    :straight (:host github :repo "jeremyf/random-table.el"))
+#+end_src
+
+I have tested this using Emacs v29.1; it might work with earlier versions.
+
+** Dependencies
+
+I make use of the ubiquitous =s= package (See https://melpa.org/#/s) (as of <2023-08-21 Mon> that is for =s-trim=).
+
+Originally, I relied on =org-d20= for dice rolling, but extracted the minimum viable logic for interpolating dice rolls (e.g. Evaluate “There are {1d4} doors.” to roll one four-sided die and message the string “There are 3 doors.”)
+
+
+* TODO Usage
+
+** Defining Tables
+
+I type =M-x random-table/roll= and am prompted to give an Expression.  I can select from a pre-populated list of registered tables (via =random-table/register=).  Or I can enter an expression, such as “2d6+1” and =random-table/roll= will then evaluate the expression.
+
+Let’s look at registering a table:
+
+#+begin_src emacs-lisp
+  (random-table/register :name "Coin Toss"
+			 :data '("Heads" "Tails"))
+#+end_src
+
+When I invoke =random-table/roll=, I can select “Coin Toss”, it will add to the kill ring and write a message based on the roll; either “Heads” or “Tails”.
+
+I could also call =random-table/roll= and provide the following: “You toss a coin and it lands on {Coin Toss}”
+
+And will get back: “You toss a coin and it lands on Heads” (assuming you rolled a Heads).
+
+In fact we could register a new table:
+
+#+begin_src emacs-lisp
+  (random-table/register :name "Things We Throw"
+			 :data '("Rocks"
+				 "Tantrum"
+				 "Coin and it comes up {Coin Toss}."))
+#+end_src
+
+When we “roll” on that table, when we get the “Coin and…” result, we’ll evaluate rolling on the Coin Toss table.  The end result is “Coin and it comes up Heads.”
+
+** Replacement Functions
+
+In the above case the “Coin and it comes up {Coin Toss}.” replacement relies on the =random-table/text-replacer-functions=; in particular the =random-table/text-replacer-function/named-table=; which looks at the text between ={= and =}= and then uses the value between to lookup a registered table.
+
+** Inner Tables
+
+Instead of relying on a custom table for a coin toss, we could call =M-x random-table/roll= and provide “[heads/tails]”.  This syntax leverages the =random-table/text-replacer-function/inner-table= logic; that is interpret an inner table.  We take the text between =[= and =]= and pick one of the elements; elements are separated by a slash (e.g. =/=) character.
+
+** Custom Rollers
+
+We can also create ranges, but will need to consider the roller:
+
+#+begin_src emacs-lisp
+  (random-table/register :name "Reaction Roll"
+			 :roller "2d6"
+			 :data '(((2) . "Hostile")
+				 ((3 . 5) . "Unfriendly")
+				 ((6 . 8) . "Unsure")
+				 ((9 . 11) . "Amicable")
+				 ((12) . "Friendly")))
+#+end_src
+
+Alternatively we can use a function:
+
+#+begin_src emacs-lisp
+  (random-table/register :name "Reaction Roll"
+			 :roller (lambda (&rest args) (+ 2 (random 6) (random 6)))
+			 :data '(((2) . "Hostile")
+				 ((3 . 5) . "Unfriendly")
+				 ((6 . 8) . "Unsure")
+				 ((9 . 11) . "Amicable")
+				 ((12) . "Friendly")))
+#+end_src
+
+The given =:roller= is effectively two six-sided dice.  And we use the rolled values to then find the correct entry in =:data=.  For example, when we roll a 4 we’d return “Unfriendly”.
+
+The roller can also be a named function; something you can re-use.  This is also the place where you could prompt for a modifier or a choice.
+
+Let’s look at a more complicated example:
+
+#+begin_src emacs-lisp
+  (defun jf/2d6-plus-prompt-for-bonus (&rest args)
+    (let ((modifier (read-number "Modifier: " 0)))
+      (list (+ 2 modifier (random 6) (random 6)))))
+
+  (random-table/register :name "Reaction Roll with Prompt"
+			 :roller #'jf/2d6-plus-prompt-for-bonus
+			 :data '(((-1000 . 2) . "Hostile")
+				 ((3 . 5) . "Unfriendly")
+				 ((6 . 8) . "Unsure")
+				 ((9 . 11) . "Amicable")
+				 ((12 . 2000) . "Friendly")))
+#+end_src
+
+In the above case, when we roll the “Reaction Roll with Prompt”, Emacs will prompt for a Modifier.  We’ll then use the given modifier to adjust the dice roll.
+
+We could also use a registered prompt (see =random-table/prompt= docstring) and our roller could then be a sequence:
+
+#+begin_src emacs-lisp
+  (random-table/prompt "Charisma Bonus" :type #'read-number)
+
+  (random-table/register :name "Reaction Roll with Prompt"
+			 :roller '(+ "2d6" "Charisma Bonus")
+			 :data '(((-1000 . 2) . "Hostile")
+				 ((3 . 5) . "Unfriendly")
+				 ((6 . 8) . "Unsure")
+				 ((9 . 11) . "Amicable")
+				 ((12 . 2000) . "Friendly")))
+#+end_src
+
+The above will add the results of rolling “2d6” to the prompt for the character’s “Charisma Bonus.”
+
+As of <2023-09-18 Mon> , I am considering how I might represent/parse: ='(+ "2d6" (read-number "Charisma Bonus: "))=; I'm uncertain about that syntax compared to what I see as the more legible ='(+ "2d6" "Charisma Bonus")=; albeit with the need to create a prompt.
+
+** Private Tables
+
+As you register tables, via =random-table/register=, you add them to the table registry.  The list of tables shown in the =M-x random-table/roll= can become quite lengthy.  To register a table, without adding it to the selection list, add =:private t= as one of the key word arguments.
+
+Below is the “Name” table.  When we roll on the “Name” table we’ll pick a random one.  Then roll on a “sub-table”.  So as to not clutter the list, we mark those “sub-tables” as =:private t=.
+
+#+begin_src emacs-lisp
+  (random-table/register :name "Name"
+			 :data '("{Name > Masculine}" "{Name > Feminine}" "{Name > Non-Binary}"))
+
+  (random-table/register :name "Name > Masculine"
+			 :private t
+			 :data '("George" "Michael"))
+
+  (random-table/register :name "Name > Feminine"
+			 :private t
+			 :data '("Mary" "Margaret"))
+
+  (random-table/register :name "Name > Non-Binary"
+			 :private t
+			 :data '("Quin" "Ash"))
+#+end_src
+
+** Storing Results for Later Use
+
+Given the composition of tables, we may also want to store the results of the roll for future reference.  Why might we do this?  Some tables may say “Roll 3 dice.  Then on table one use the highest value.  And on table two use the lowest value.  And on table three, if there are doubles, use the number that is the “double”.
+
+#+begin_src emacs-lisp
+  (random-table/register :name "High Low"
+			 :roller (lambda (&rest args) (list (+ 1 (random 6)) (+ 1 (random 6))))
+			 ;; We include this so that we only return the first data element.  The
+			 ;; dice rolls are for the High Value and Low Value
+			 :fetcher (lambda (data roll) (car data))
+			 :data '("\n- High :: {High Value}\n- Low :: {Low Value}")
+			 :store t)
+
+  (random-table/register :name "High Value"
+			 :reuse "High Low"
+			 :private t
+			 :filter #'max
+			 :data '("One" "Two" "Three" "Four" "Five" "Six"))
+
+  (random-table/register :name "Low Value"
+			 :reuse "High Low"
+			 :private t
+			 :filter #'min
+			 :data '("One" "Two" "Three" "Four" "Five" "Six"))
+#+end_src
+
+As of 2023-08-16 I store the roll in a somewhat naive manner; for a table with =:store t=, when we “roll on that table” we add to a hash the table name and the results of the roll (e.g. the specific dice as a list).  Then until we’ve fully evaluated the roll for that table, we can reference the dice results for that table.
+
+On 2023-09-20, I added =random-table/storage/results/get-data-value=; this function can retrieve the resolved value of the stored roll.  Where =random-table/storage/results/get= retrieves the dice results (e.g. =1= from a “1d6” roll), the =random-table/storage/results/get-data-value= interprets the =1= on from the stored table’s =data= struct.
+
+One thing I introduced in the above was the =:fetcher= and =:filter= elements.  The =:filter= takes the dice pool (as a list) and returns an integer.  The =:fetcher= takes the integer and looks things up in the provided =:data=.
+
+The general flow is:
+
+- =:roll= the dice
+- =:filter= the roll
+- =:fetch= the filtered result
+
+That flow is defined in =random-table/evaluate/table=.
+
+** Encoding a Complex New Table
+
+I set about encoding the /Death and Dismemberment/ rules for my Random Table package.
+
+This required a few changes:
+
+1. I needed the concept of a =current_roll=.  The /Death and Dismemberment/ table.
+2. I wanted dice to be able to return strings and then use those strings as the lookup on the table’s =:data=.
+
+I did not, at present, worry about the cumulative effects of data.  However, I’m seeing how I might do that.
+
+Let’s dig in.
+
+There are five tables to consider for /Death and Dismemberment/:
+
+- Physical
+- Acid/Fire
+- Eldritch
+- Lightning
+- Non-Lethal
+
+Here’s how I set about encoding that was as follows:
+
+#+begin_src emacs-lisp
+  (random-table/register :name "Death and Dismemberment"
+    :roller #'random-table/roller/prompt-from-table-data
+    :data '(("Physical" . "{Death and Dismemberment > Physical}")
+	     ("Acid/Fire" . "{Death and Dismemberment > Acid/Fire}")
+	     ("Eldritch" . "{Death and Dismemberment > Eldritch}")
+	     ("Lightning" . "{Death and Dismemberment > Lightning}")
+	     ("Non-Lethal" . "{Death and Dismemberment > Non-Lethal}")))
+#+end_src
+
+The =:roller= is a function as follows:
+
+#+begin_src emacs-lisp
+  (defun random-table/roller/prompt-from-table-data (table)
+    (completing-read
+     (format "%s via:" (random-table-name table))
+     (random-table-data table) nil t))
+#+end_src
+
+In the case of passing the =Death and Dismemberment= table, you get the following prompt: “Death and Dismemberment via”.  And the list of options are: Physical, Acid/Fire, Eldritch, Lightning, and Non-Lethal.
+
+Once I pick the option, I then evaluate the defined sub-table.  Let’s look at =Death and Dismemberment > Physical=.
+
+#+begin_src emacs-lisp
+  (random-table/register :name "Death and Dismemberment > Physical"
+    :roller (lambda (table) (+ 1 (random 6)))
+    :private t
+    :data '(((1) . "Death and Dismemberment > Physical > Arm")
+	     ((2) . "Death and Dismemberment > Physical > Leg")
+	     ((3 . 4) . "Death and Dismemberment > Physical > Torso")
+	     ((5 . 6) . "Death and Dismemberment > Physical > Head")))
+#+end_src
+
+This is a rather straight-forward table.  Let’s say the =:roller= returns a 5.  We will then evaluate the =Death and Dismemberment > Physical > Head= table; let’s look at that.  The resulting table is rather lengthy.
+
+#+begin_src emacs-lisp
+  (random-table/register :name "Death and Dismemberment > Physical > Head"
+    :roller #'random-table/roller/death-and-dismemberment/damage
+    :private t
+    :data '(((1 . 10) . "Head Injury; Rolled {current_roll}\n- +1 Injury\n- Concussed for +{current_roll} day(s).")
+	     ((11 . 15) . "Head Injury; Rolled {current_roll}\n- +1 Injury\n- Concussed for +{current_roll} day(s).\n- One Fatal Wound.\n- {Save vs. Skullcracked}")
+	     ((16 . 1000) . "Head Injury; Rolled {current_roll}\n- +1 Injury\n- Concussed for +{current_roll} day(s).\n- {current_roll} - 14 Fatal Wounds.\n- {Save vs. Skullcracked}")))
+#+end_src
+
+The =:roller= (e.g. =random-table/roller/death-and-dismemberment/damage=) is as follows:
+
+#+begin_src emacs-lisp
+  (defun random-table/roller/death-and-dismemberment/damage (&rest table)
+    (+ 1
+       (random 12)
+       (read-number "Number of Existing Injuries: " 0)
+       (read-number "Lethal Damage: " 0)))
+#+end_src
+
+We roll a d12, add the number of existing injuries, and accumulated lethal damage.  Then look up the result in the =:data= of =Death and Dismemberment > Physical > Head=.  Let’s say the result is a 12.  We’ll need to roll on the the =Save vs. Skullcracked= table, which I’ve included below:
+
+#+begin_src emacs-lisp
+  (random-table/register :name "Save vs. Skullcracked"
+    :roller #'random-table/roller/saving-throw
+    :private t
+    :data '(("Save" . "Saved against cracked skull…gain a new scar.")
+	     ("Fail" . "Failed to save against cracked skull.  {Save vs. Skullcracked > Failure}")))
+#+end_src
+
+The =:roller= (e.g. =random-table/roller/saving-throw=) will prompt for the saving throw score and any modifier to the roll.  Then it will return “Fail” or “Save” depending on the results.  See the function.
+
+#+begin_src emacs-lisp
+  (defun random-table/roller/saving-throw (table)
+    (let ((score (read-number (format "%s\n> Enter Saving Throw Score: " (random-table-name table)) 15))
+	   (modifier (read-number (format "%s\n> Modifier: " (random-table-name table)) 0))
+	   (roll (+ 1 (random 20))))
+      (cond
+	((= roll 1) "Fail")
+	((= roll 20) "Save")
+	((>= (+ roll modifier) score) "Save")
+	(t "Fail"))))
+#+end_src
+
+Let’s say that we “Fail” the saving throw.  We now lookup on the =Save vs. Skullcracked > Failure= table:
+
+#+begin_src emacs-lisp
+  (random-table/register :name "Save vs. Skullcracked > Failure"
+			 :private t
+			 :data '("Permanently lose 1 Intelligence."
+				 "Permanently lose 1 Wisdom."
+				 "Permanently lose 1 Charisma."
+				 "Lose your left eye. -1 to Ranged Attack."
+				 "Lose your right eye. -1 to Ranged Attack."
+				 "Go into a coma. You can recover from a coma by making a Con check after 1d6 days, and again after 1d6 weeks if you fail the first check. If you fail both, it is permanent."))
+#+end_src
+
+Let’s say we get “Permanently lose 1 Intelligence” for the failed save.  Now, working our way back, let’s see what that all evaluates to:
+
+#+begin_example
+Head Injury; Rolled 12
+- +1 Injury
+- Concussed for +12 day(s).
+- One Fatal Wound.
+- Failed to save against cracked skull.  Permanently lose 1 Intelligence
+#+end_example
+
+The modified d12 roll resulted in a 12; hence the +12 day(s).
+
+** Prompting for You to Roll the dice
+
+Let’s create a quick table:
+
+#+begin_src emacs-lisp
+  (random-table/register
+     :name "Random Attribute"
+     :data '("Strength"
+	     "Constitution"
+	     "Dexterity"
+	     "Intelligence"
+	     "Wisdom"
+	     "Charisma"))
+#+end_src
+
+Given that I passed the universal prefix arg (e.g. =C-u=) when I roll on the =Random Attribute= table then I will get the prompt “Roll 1d6 for:” and the value I enter will be used for looking up the correct =:data= element.
+
+In this way, you can roll the dice and use this package to encode the rules lookup.
+
+** Exclude a Table from Prompting for a Roll
+
+Any table that has one element in =:data= will not prompt for the roll.  Also, you can specify =:exclude-from-prompt t= when registering a table; then any “rolls” on that specific table will not prompt to give the dice value.
+
+Ultimately, the goal is to ask for dice rolls when they might be something the player wants to roll.
+
+** Allow for Rudimentary Math Operands with Table Results
+
+In my quest for more random tables and functionality, I worked through Errant’s Hiring Retainers section.  Using the PC’s presence, you look-up the morale base.  Then roll 2d6, modified by the offer’s generosity, to then determine the modifier to the morale base.
+
+To perform mathematical operations, I continue to leverage the =s-format= functionality.  That is =s-format= will evaluate and replace the text of the following format: ={text}=.
+
+Below is the definition of a random Henchman for Errant.
+
+#+begin_src emacs-lisp
+  (random-table/register
+   :name "Henchman (Errant)"
+   :data '("\n- Archetype :: {Henchman > Archetype}\n- Morale :: {(Henchman > Morale Base) + (Henchman > Morale Variable)}"))
+#+end_src
+
+The ={Henchman > Archetype (Errant)}= will look on the following table:
+
+#+begin_src emacs-lisp
+    (random-table/register
+     :name "Henchman > Archetype"
+     :private t
+     :roller #'random-table/roller/1d10
+     :data '(((1 . 5) . "Warrior")
+	     ((6 . 8) . "Professional")
+	     ((9 . 10) . "Magic User")))
+#+end_src
+
+The ={[Henchman > Morale Base] + [Henchman > Morale Variable]}= does the following:
+
+- Roll on =Henchman > Morale Base=
+- Roll on =Henchman > Morale Variable=
+- Add those two results together.  
+
+#+begin_src emacs-lisp  
+  (random-table/register
+   :name "Henchman > Morale Base"
+   :private t
+   :roller (lambda (table) (read-number "Hiring PC's Presence Score: "))
+   :data '(((3 . 4) . 5)
+	   ((5 . 8) . 6)
+	   ((9 . 13) . 7)
+	   ((14 . 16) . 8)
+	   ((17 . 18) . 9)
+	   ((19 . 20) . 10)))
+
+  (random-table/register
+   :name "Henchman > Morale Variable"
+   :private t
+   :roller (lambda (table)
+	     (let* ((options '(("Nothing" . 0) ("+25%" . 1) ("+50%" . 2) ("+75% or more" . 3)))
+		    (key (completing-read "Additional Generosity of Offer: " options))
+		    (modifier (alist-get key options nil nil #'string=)))
+	       (+ modifier (random-table/roller/2d6 table))))
+   :data '(((2) . -2)
+	   ((3 . 5) . -1)
+	   ((6 . 8) . 0)
+	   ((9 . 11) . 1)
+	   ((12 . 15) . 2)))
+#+end_src
+
+** Registering Prompts
+
+Similar to =random-table/roller=, you can register a prompt via =random-table/prompt=.  There are common prompts (e.g. “Charisma Modifier”).  In registering a prompt, during an invocation of =random-table/roll= each prompt will only be requested once.  That is to say, the package will cache the prompt’s response and re-use that through out the roll.
+
+This functionality leverages the per =random-table/roll= cache (as stored in the =random-table/roll/cache= variable).
+
+#+begin_src emacs-lisp
+  (random-table/prompt "Charisma Modifier"
+		       :type #'read-number
+		       :default 0)
+
+  (random-table/register :name "Reaction Roll"
+			 :roller (lambda (table)
+				   (+ (random-table/prompt "Charisma Modifier")
+				      (random-table/roller/2d6))))
+#+end_src
+
+Why include the caching?  In reviewing Kevin Crawford’s [Scarlet Heroes](https://www.drivethrurpg.com/product/127180/Scarlet-Heroes?affiliate_id=318171) there’s a table for reaction rolls that asks for a few modifiers, the rolls on one table, and one result is to roll on another table using those same modifiers.
+
+** Testing All of This
+
+I have added the non-interactive =random-table/roll/test-all= function; this will roll once on each of the registered non-private tables and report the results.  I've found it most useful when testing notable refactoring; namely how I handle the =:roller= slot for a =random-table=.
+
+
+* The Code
+
 #+begin_src emacs-lisp :tangle "random-table.el" :results none 
   ;;; random-table.el --- Roll on some tables. -*- lexical-binding: t -*-
 
@@ -485,6 +920,63 @@ I want to store, for later reference, the results of rolls on a table.
 #+end_src
 
 
+*** Rolling Some Actual Dice
+
+Ultimately, we need to roll some dice.  Actual, virtual, polyhedrals.
+
+#+begin_src emacs-lisp :tangle "random-table.el" :results none 
+(defvar random-table/dice/regex
+  "^\\([0-9]*\\)?d\\([0-9]*\\)\\([+-][0-9]*\\)?")
+
+;;; Dice String Evaluator
+;;
+;; The following code (with the function name prefix of \"random-table/dice\"
+;; is derived from Pelle Nilsson's decide.el package
+(defun random-table/dice/roll (spec-string)
+  "Evaluate the given SPEC-STRING by parsing as a dice expression."
+  (if (string= "d66" spec-string)
+      (+ (* 10 (+ 1 (random 6))) (+ 1 (random 6)))
+    (apply #'random-table/dice/roll-spec
+	   (random-table/dice/parse-spec spec-string))))
+
+(defun random-table/dice/parse-spec (spec)
+  "Convert SPEC to list:
+
+   - Number of dice
+   - Face
+   - Adder
+
+  e.g. \"1d6\" -> (1 6 0) or \"2d10+2\" -> (2 10 2)"
+  (when (string-match
+	 "^\\([0-9]*\\)?d\\([0-9]*\\)\\([+-][0-9]*\\)?"
+	 spec)
+    (list (random-table/dice/string-to-number
+	   (match-string 1 spec) 1)
+	  (random-table/dice/string-to-number
+	   (match-string 2 spec) 6)
+	  (random-table/dice/string-to-number
+	   (match-string 3 spec) 0))))
+
+(defun random-table/dice/string-to-number (spec default)
+  "Convert the SPEC (and DEFAULT) into an integer."
+  (let ((n (if (stringp spec)
+	       (string-to-number spec)
+	     0)))
+    (cond ((null spec) default)
+	  ((> n 0) n)
+	  ((string= "" spec) default)
+	  ((string= "+" spec) 0)
+	  ((string= "-" spec) 0)
+	  (t spec))))
+
+(defun random-table/dice/roll-spec (number-dice faces modifier)
+  "Roll the NUMBER-DICE each with FACES number of sides and add MODIFIER."
+  (let ((amount modifier))
+    (dotimes (i number-dice)
+      (setq amount (+ amount 1 (random faces))))
+    amount))
+#+end_src
+
 *** Reporter
 
 When you roll on tables, you need to output that information.  This is done via the =random-table/reporter=.
@@ -708,57 +1200,6 @@ See `random-table/reporter'."
 		  nil)))
       (or (when row (random-table/parse row)) "")))
 
-  (defvar random-table/dice/regex
-    "^\\([0-9]*\\)?d\\([0-9]*\\)\\([+-][0-9]*\\)?")
-
-  ;;; Dice String Evaluator
-  ;;
-  ;; The following code (with the function name prefix of \"random-table/dice\"
-  ;; is derived from Pelle Nilsson's decide.el package
-  (defun random-table/dice/roll (spec-string)
-    "Evaluate the given SPEC-STRING by parsing as a dice expression."
-    (if (string= "d66" spec-string)
-	(+ (* 10 (+ 1 (random 6))) (+ 1 (random 6)))
-      (apply #'random-table/dice/roll-spec
-	     (random-table/dice/parse-spec spec-string))))
-
-  (defun random-table/dice/parse-spec (spec)
-    "Convert SPEC to list:
-
-     - Number of dice
-     - Face
-     - Adder
-
-    e.g. \"1d6\" -> (1 6 0) or \"2d10+2\" -> (2 10 2)"
-    (when (string-match
-	   "^\\([0-9]*\\)?d\\([0-9]*\\)\\([+-][0-9]*\\)?"
-	   spec)
-      (list (random-table/dice/string-to-number
-	     (match-string 1 spec) 1)
-	    (random-table/dice/string-to-number
-	     (match-string 2 spec) 6)
-	    (random-table/dice/string-to-number
-	     (match-string 3 spec) 0))))
-
-  (defun random-table/dice/string-to-number (spec default)
-    "Convert the SPEC (and DEFAULT) into an integer."
-    (let ((n (if (stringp spec)
-		 (string-to-number spec)
-	       0)))
-      (cond ((null spec) default)
-	    ((> n 0) n)
-	    ((string= "" spec) default)
-	    ((string= "+" spec) 0)
-	    ((string= "-" spec) 0)
-	    (t spec))))
-
-  (defun random-table/dice/roll-spec (number-dice faces modifier)
-    "Roll the NUMBER-DICE each with FACES number of sides and add MODIFIER."
-    (let ((amount modifier))
-      (dotimes (i number-dice)
-	(setq amount (+ amount 1 (random faces))))
-      amount))
-
   (defun random-table/completing-read/alist (prompt alist &rest args)
     "Like `completing-read' but PROMPT to find value in given ALIST.
 
@@ -787,437 +1228,6 @@ See `random-table/reporter'."
   ;;; random-table.el ends here
 #+end_src
 
-
-** Features
-
-- Composing Tables :: The results of one table could be to roll on another table or tables; and so on.
-- Cached Results :: Some dice rolls inform later dice rolls.  There’s a mechanism to do that; though it likely needs improvement.
-- Private Tables :: Useful when you don’t want to see the named table as an option in the =random-table/roll=; but you want to reference this table elsewhere.
-- Prompt for Dice Rolls :: Random tables can encode complex procedures, and sometimes you might want to follow the procedures but provide you’re own dice rolls.
-- Mad Libs Like Interpolation :: Instead of picking a table to roll on for =random-table/roll= you can type an expression (e.g. “There are {2d6} orcs”) and it will interpret that results (e.g. rolling a 6 we’d have “There are 6 orcs”).
-- Inner Tables :: Within a table’s result you can have an inner table (e.g. “you meet a [brigand/priest/child/zealot/haunting nightmare]”) and the parser will pick a random element.  
-- Custom “Reporter” :: By default, the results are written to the =*Messages*= buffer and added to the kill ring.  But you can configure to have a different reporter.  (see =random-table/reporter=)  
-- Registering and Caching Prompt Choices :: During the life cycle of the =random-table/roll= you have access to the hash in the =random-table/roll/cache= variable.  Useful for remembering things you’ve already prompted the user for; such as their Charisma modifier.
-- Extensible Parsing Logic :: The =random-table/text-replacer-functions= is a custom variable that allows for adding and removing functions to provide more extensible logic.
-
-And more.
-
-* Installation
-
-As of <2023-08-21 Mon> this repository is not yet part of any of the package archive (e.g. https://melpa.org).  But you can install it via =use-package=.
-
-#+begin_src emacs-lisp
-  (use-package random-table
-    :straight (:host github :repo "jeremyf/random-table.el"))
-#+end_src
-
-I have tested this using Emacs v29.1; it might work with earlier versions.
-
-** Dependencies
-
-I make use of the ubiquitous =s= package (See https://melpa.org/#/s) (as of <2023-08-21 Mon> that is for =s-trim=).
-
-Originally, I relied on =org-d20= for dice rolling, but extracted the minimum viable logic for interpolating dice rolls (e.g. Evaluate “There are {1d4} doors.” to roll one four-sided die and message the string “There are 3 doors.”)
-
-* Usage
-
-** Defining Tables
-
-I type =M-x random-table/roll= and am prompted to give an Expression.  I can select from a pre-populated list of registered tables (via =random-table/register=).  Or I can enter an expression, such as “2d6+1” and =random-table/roll= will then evaluate the expression.
-
-Let’s look at registering a table:
-
-#+begin_src emacs-lisp
-  (random-table/register :name "Coin Toss"
-			 :data '("Heads" "Tails"))
-#+end_src
-
-When I invoke =random-table/roll=, I can select “Coin Toss”, it will add to the kill ring and write a message based on the roll; either “Heads” or “Tails”.
-
-I could also call =random-table/roll= and provide the following: “You toss a coin and it lands on {Coin Toss}”
-
-And will get back: “You toss a coin and it lands on Heads” (assuming you rolled a Heads).
-
-In fact we could register a new table:
-
-#+begin_src emacs-lisp
-  (random-table/register :name "Things We Throw"
-			 :data '("Rocks"
-				 "Tantrum"
-				 "Coin and it comes up {Coin Toss}."))
-#+end_src
-
-When we “roll” on that table, when we get the “Coin and…” result, we’ll evaluate rolling on the Coin Toss table.  The end result is “Coin and it comes up Heads.”
-
-** Replacement Functions
-
-In the above case the “Coin and it comes up {Coin Toss}.” replacement relies on the =random-table/text-replacer-functions=; in particular the =random-table/text-replacer-function/named-table=; which looks at the text between ={= and =}= and then uses the value between to lookup a registered table.
-
-** Inner Tables
-
-Instead of relying on a custom table for a coin toss, we could call =M-x random-table/roll= and provide “[heads/tails]”.  This syntax leverages the =random-table/text-replacer-function/inner-table= logic; that is interpret an inner table.  We take the text between =[= and =]= and pick one of the elements; elements are separated by a slash (e.g. =/=) character.
-
-** Custom Rollers
-
-We can also create ranges, but will need to consider the roller:
-
-#+begin_src emacs-lisp
-  (random-table/register :name "Reaction Roll"
-			 :roller "2d6"
-			 :data '(((2) . "Hostile")
-				 ((3 . 5) . "Unfriendly")
-				 ((6 . 8) . "Unsure")
-				 ((9 . 11) . "Amicable")
-				 ((12) . "Friendly")))
-#+end_src
-
-Alternatively we can use a function:
-
-#+begin_src emacs-lisp
-  (random-table/register :name "Reaction Roll"
-			 :roller (lambda (&rest args) (+ 2 (random 6) (random 6)))
-			 :data '(((2) . "Hostile")
-				 ((3 . 5) . "Unfriendly")
-				 ((6 . 8) . "Unsure")
-				 ((9 . 11) . "Amicable")
-				 ((12) . "Friendly")))
-#+end_src
-
-The given =:roller= is effectively two six-sided dice.  And we use the rolled values to then find the correct entry in =:data=.  For example, when we roll a 4 we’d return “Unfriendly”.
-
-The roller can also be a named function; something you can re-use.  This is also the place where you could prompt for a modifier or a choice.
-
-Let’s look at a more complicated example:
-
-#+begin_src emacs-lisp
-  (defun jf/2d6-plus-prompt-for-bonus (&rest args)
-    (let ((modifier (read-number "Modifier: " 0)))
-      (list (+ 2 modifier (random 6) (random 6)))))
-
-  (random-table/register :name "Reaction Roll with Prompt"
-			 :roller #'jf/2d6-plus-prompt-for-bonus
-			 :data '(((-1000 . 2) . "Hostile")
-				 ((3 . 5) . "Unfriendly")
-				 ((6 . 8) . "Unsure")
-				 ((9 . 11) . "Amicable")
-				 ((12 . 2000) . "Friendly")))
-#+end_src
-
-In the above case, when we roll the “Reaction Roll with Prompt”, Emacs will prompt for a Modifier.  We’ll then use the given modifier to adjust the dice roll.
-
-We could also use a registered prompt (see =random-table/prompt= docstring) and our roller could then be a sequence:
-
-#+begin_src emacs-lisp
-  (random-table/prompt "Charisma Bonus" :type #'read-number)
-
-  (random-table/register :name "Reaction Roll with Prompt"
-			 :roller '(+ "2d6" "Charisma Bonus")
-			 :data '(((-1000 . 2) . "Hostile")
-				 ((3 . 5) . "Unfriendly")
-				 ((6 . 8) . "Unsure")
-				 ((9 . 11) . "Amicable")
-				 ((12 . 2000) . "Friendly")))
-#+end_src
-
-The above will add the results of rolling “2d6” to the prompt for the character’s “Charisma Bonus.”
-
-As of <2023-09-18 Mon> , I am considering how I might represent/parse: ='(+ "2d6" (read-number "Charisma Bonus: "))=; I'm uncertain about that syntax compared to what I see as the more legible ='(+ "2d6" "Charisma Bonus")=; albeit with the need to create a prompt.
-
-** Private Tables
-
-As you register tables, via =random-table/register=, you add them to the table registry.  The list of tables shown in the =M-x random-table/roll= can become quite lengthy.  To register a table, without adding it to the selection list, add =:private t= as one of the key word arguments.
-
-Below is the “Name” table.  When we roll on the “Name” table we’ll pick a random one.  Then roll on a “sub-table”.  So as to not clutter the list, we mark those “sub-tables” as =:private t=.
-
-#+begin_src emacs-lisp
-  (random-table/register :name "Name"
-			 :data '("{Name > Masculine}" "{Name > Feminine}" "{Name > Non-Binary}"))
-
-  (random-table/register :name "Name > Masculine"
-			 :private t
-			 :data '("George" "Michael"))
-
-  (random-table/register :name "Name > Feminine"
-			 :private t
-			 :data '("Mary" "Margaret"))
-
-  (random-table/register :name "Name > Non-Binary"
-			 :private t
-			 :data '("Quin" "Ash"))
-#+end_src
-
-** Storing Results for Later Use
-
-Given the composition of tables, we may also want to store the results of the roll for future reference.  Why might we do this?  Some tables may say “Roll 3 dice.  Then on table one use the highest value.  And on table two use the lowest value.  And on table three, if there are doubles, use the number that is the “double”.
-
-#+begin_src emacs-lisp
-  (random-table/register :name "High Low"
-			 :roller (lambda (&rest args) (list (+ 1 (random 6)) (+ 1 (random 6))))
-			 ;; We include this so that we only return the first data element.  The
-			 ;; dice rolls are for the High Value and Low Value
-			 :fetcher (lambda (data roll) (car data))
-			 :data '("\n- High :: {High Value}\n- Low :: {Low Value}")
-			 :store t)
-
-  (random-table/register :name "High Value"
-			 :reuse "High Low"
-			 :private t
-			 :filter #'max
-			 :data '("One" "Two" "Three" "Four" "Five" "Six"))
-
-  (random-table/register :name "Low Value"
-			 :reuse "High Low"
-			 :private t
-			 :filter #'min
-			 :data '("One" "Two" "Three" "Four" "Five" "Six"))
-#+end_src
-
-As of 2023-08-16 I store the roll in a somewhat naive manner; for a table with =:store t=, when we “roll on that table” we add to a hash the table name and the results of the roll (e.g. the specific dice as a list).  Then until we’ve fully evaluated the roll for that table, we can reference the dice results for that table.
-
-On 2023-09-20, I added =random-table/storage/results/get-data-value=; this function can retrieve the resolved value of the stored roll.  Where =random-table/storage/results/get= retrieves the dice results (e.g. =1= from a “1d6” roll), the =random-table/storage/results/get-data-value= interprets the =1= on from the stored table’s =data= struct.
-
-One thing I introduced in the above was the =:fetcher= and =:filter= elements.  The =:filter= takes the dice pool (as a list) and returns an integer.  The =:fetcher= takes the integer and looks things up in the provided =:data=.
-
-The general flow is:
-
-- =:roll= the dice
-- =:filter= the roll
-- =:fetch= the filtered result
-
-That flow is defined in =random-table/evaluate/table=.
-
-** Encoding a Complex New Table
-
-I set about encoding the /Death and Dismemberment/ rules for my Random Table package.
-
-This required a few changes:
-
-1. I needed the concept of a =current_roll=.  The /Death and Dismemberment/ table.
-2. I wanted dice to be able to return strings and then use those strings as the lookup on the table’s =:data=.
-
-I did not, at present, worry about the cumulative effects of data.  However, I’m seeing how I might do that.
-
-Let’s dig in.
-
-There are five tables to consider for /Death and Dismemberment/:
-
-- Physical
-- Acid/Fire
-- Eldritch
-- Lightning
-- Non-Lethal
-
-Here’s how I set about encoding that was as follows:
-
-#+begin_src emacs-lisp
-  (random-table/register :name "Death and Dismemberment"
-    :roller #'random-table/roller/prompt-from-table-data
-    :data '(("Physical" . "{Death and Dismemberment > Physical}")
-	     ("Acid/Fire" . "{Death and Dismemberment > Acid/Fire}")
-	     ("Eldritch" . "{Death and Dismemberment > Eldritch}")
-	     ("Lightning" . "{Death and Dismemberment > Lightning}")
-	     ("Non-Lethal" . "{Death and Dismemberment > Non-Lethal}")))
-#+end_src
-
-The =:roller= is a function as follows:
-
-#+begin_src emacs-lisp
-  (defun random-table/roller/prompt-from-table-data (table)
-    (completing-read
-     (format "%s via:" (random-table-name table))
-     (random-table-data table) nil t))
-#+end_src
-
-In the case of passing the =Death and Dismemberment= table, you get the following prompt: “Death and Dismemberment via”.  And the list of options are: Physical, Acid/Fire, Eldritch, Lightning, and Non-Lethal.
-
-Once I pick the option, I then evaluate the defined sub-table.  Let’s look at =Death and Dismemberment > Physical=.
-
-#+begin_src emacs-lisp
-  (random-table/register :name "Death and Dismemberment > Physical"
-    :roller (lambda (table) (+ 1 (random 6)))
-    :private t
-    :data '(((1) . "Death and Dismemberment > Physical > Arm")
-	     ((2) . "Death and Dismemberment > Physical > Leg")
-	     ((3 . 4) . "Death and Dismemberment > Physical > Torso")
-	     ((5 . 6) . "Death and Dismemberment > Physical > Head")))
-#+end_src
-
-This is a rather straight-forward table.  Let’s say the =:roller= returns a 5.  We will then evaluate the =Death and Dismemberment > Physical > Head= table; let’s look at that.  The resulting table is rather lengthy.
-
-#+begin_src emacs-lisp
-  (random-table/register :name "Death and Dismemberment > Physical > Head"
-    :roller #'random-table/roller/death-and-dismemberment/damage
-    :private t
-    :data '(((1 . 10) . "Head Injury; Rolled {current_roll}\n- +1 Injury\n- Concussed for +{current_roll} day(s).")
-	     ((11 . 15) . "Head Injury; Rolled {current_roll}\n- +1 Injury\n- Concussed for +{current_roll} day(s).\n- One Fatal Wound.\n- {Save vs. Skullcracked}")
-	     ((16 . 1000) . "Head Injury; Rolled {current_roll}\n- +1 Injury\n- Concussed for +{current_roll} day(s).\n- {current_roll} - 14 Fatal Wounds.\n- {Save vs. Skullcracked}")))
-#+end_src
-
-The =:roller= (e.g. =random-table/roller/death-and-dismemberment/damage=) is as follows:
-
-#+begin_src emacs-lisp
-  (defun random-table/roller/death-and-dismemberment/damage (&rest table)
-    (+ 1
-       (random 12)
-       (read-number "Number of Existing Injuries: " 0)
-       (read-number "Lethal Damage: " 0)))
-#+end_src
-
-We roll a d12, add the number of existing injuries, and accumulated lethal damage.  Then look up the result in the =:data= of =Death and Dismemberment > Physical > Head=.  Let’s say the result is a 12.  We’ll need to roll on the the =Save vs. Skullcracked= table, which I’ve included below:
-
-#+begin_src emacs-lisp
-  (random-table/register :name "Save vs. Skullcracked"
-    :roller #'random-table/roller/saving-throw
-    :private t
-    :data '(("Save" . "Saved against cracked skull…gain a new scar.")
-	     ("Fail" . "Failed to save against cracked skull.  {Save vs. Skullcracked > Failure}")))
-#+end_src
-
-The =:roller= (e.g. =random-table/roller/saving-throw=) will prompt for the saving throw score and any modifier to the roll.  Then it will return “Fail” or “Save” depending on the results.  See the function.
-
-#+begin_src emacs-lisp
-  (defun random-table/roller/saving-throw (table)
-    (let ((score (read-number (format "%s\n> Enter Saving Throw Score: " (random-table-name table)) 15))
-	   (modifier (read-number (format "%s\n> Modifier: " (random-table-name table)) 0))
-	   (roll (+ 1 (random 20))))
-      (cond
-	((= roll 1) "Fail")
-	((= roll 20) "Save")
-	((>= (+ roll modifier) score) "Save")
-	(t "Fail"))))
-#+end_src
-
-Let’s say that we “Fail” the saving throw.  We now lookup on the =Save vs. Skullcracked > Failure= table:
-
-#+begin_src emacs-lisp
-  (random-table/register :name "Save vs. Skullcracked > Failure"
-			 :private t
-			 :data '("Permanently lose 1 Intelligence."
-				 "Permanently lose 1 Wisdom."
-				 "Permanently lose 1 Charisma."
-				 "Lose your left eye. -1 to Ranged Attack."
-				 "Lose your right eye. -1 to Ranged Attack."
-				 "Go into a coma. You can recover from a coma by making a Con check after 1d6 days, and again after 1d6 weeks if you fail the first check. If you fail both, it is permanent."))
-#+end_src
-
-Let’s say we get “Permanently lose 1 Intelligence” for the failed save.  Now, working our way back, let’s see what that all evaluates to:
-
-#+begin_example
-Head Injury; Rolled 12
-- +1 Injury
-- Concussed for +12 day(s).
-- One Fatal Wound.
-- Failed to save against cracked skull.  Permanently lose 1 Intelligence
-#+end_example
-
-The modified d12 roll resulted in a 12; hence the +12 day(s).
-
-** Prompting for You to Roll the dice
-
-Let’s create a quick table:
-
-#+begin_src emacs-lisp
-  (random-table/register
-     :name "Random Attribute"
-     :data '("Strength"
-	     "Constitution"
-	     "Dexterity"
-	     "Intelligence"
-	     "Wisdom"
-	     "Charisma"))
-#+end_src
-
-Given that I passed the universal prefix arg (e.g. =C-u=) when I roll on the =Random Attribute= table then I will get the prompt “Roll 1d6 for:” and the value I enter will be used for looking up the correct =:data= element.
-
-In this way, you can roll the dice and use this package to encode the rules lookup.
-
-** Exclude a Table from Prompting for a Roll
-
-Any table that has one element in =:data= will not prompt for the roll.  Also, you can specify =:exclude-from-prompt t= when registering a table; then any “rolls” on that specific table will not prompt to give the dice value.
-
-Ultimately, the goal is to ask for dice rolls when they might be something the player wants to roll.
-
-** Allow for Rudimentary Math Operands with Table Results
-
-In my quest for more random tables and functionality, I worked through Errant’s Hiring Retainers section.  Using the PC’s presence, you look-up the morale base.  Then roll 2d6, modified by the offer’s generosity, to then determine the modifier to the morale base.
-
-To perform mathematical operations, I continue to leverage the =s-format= functionality.  That is =s-format= will evaluate and replace the text of the following format: ={text}=.
-
-Below is the definition of a random Henchman for Errant.
-
-#+begin_src emacs-lisp
-  (random-table/register
-   :name "Henchman (Errant)"
-   :data '("\n- Archetype :: {Henchman > Archetype}\n- Morale :: {(Henchman > Morale Base) + (Henchman > Morale Variable)}"))
-#+end_src
-
-The ={Henchman > Archetype (Errant)}= will look on the following table:
-
-#+begin_src emacs-lisp
-    (random-table/register
-     :name "Henchman > Archetype"
-     :private t
-     :roller #'random-table/roller/1d10
-     :data '(((1 . 5) . "Warrior")
-	     ((6 . 8) . "Professional")
-	     ((9 . 10) . "Magic User")))
-#+end_src
-
-The ={[Henchman > Morale Base] + [Henchman > Morale Variable]}= does the following:
-
-- Roll on =Henchman > Morale Base=
-- Roll on =Henchman > Morale Variable=
-- Add those two results together.  
-
-#+begin_src emacs-lisp  
-  (random-table/register
-   :name "Henchman > Morale Base"
-   :private t
-   :roller (lambda (table) (read-number "Hiring PC's Presence Score: "))
-   :data '(((3 . 4) . 5)
-	   ((5 . 8) . 6)
-	   ((9 . 13) . 7)
-	   ((14 . 16) . 8)
-	   ((17 . 18) . 9)
-	   ((19 . 20) . 10)))
-
-  (random-table/register
-   :name "Henchman > Morale Variable"
-   :private t
-   :roller (lambda (table)
-	     (let* ((options '(("Nothing" . 0) ("+25%" . 1) ("+50%" . 2) ("+75% or more" . 3)))
-		    (key (completing-read "Additional Generosity of Offer: " options))
-		    (modifier (alist-get key options nil nil #'string=)))
-	       (+ modifier (random-table/roller/2d6 table))))
-   :data '(((2) . -2)
-	   ((3 . 5) . -1)
-	   ((6 . 8) . 0)
-	   ((9 . 11) . 1)
-	   ((12 . 15) . 2)))
-#+end_src
-
-** Registering Prompts
-
-Similar to =random-table/roller=, you can register a prompt via =random-table/prompt=.  There are common prompts (e.g. “Charisma Modifier”).  In registering a prompt, during an invocation of =random-table/roll= each prompt will only be requested once.  That is to say, the package will cache the prompt’s response and re-use that through out the roll.
-
-This functionality leverages the per =random-table/roll= cache (as stored in the =random-table/roll/cache= variable).
-
-#+begin_src emacs-lisp
-  (random-table/prompt "Charisma Modifier"
-		       :type #'read-number
-		       :default 0)
-
-  (random-table/register :name "Reaction Roll"
-			 :roller (lambda (table)
-				   (+ (random-table/prompt "Charisma Modifier")
-				      (random-table/roller/2d6))))
-#+end_src
-
-Why include the caching?  In reviewing Kevin Crawford’s [Scarlet Heroes](https://www.drivethrurpg.com/product/127180/Scarlet-Heroes?affiliate_id=318171) there’s a table for reaction rolls that asks for a few modifiers, the rolls on one table, and one result is to roll on another table using those same modifiers.
-
-** Testing All of This
-
-I have added the non-interactive =random-table/roll/test-all= function; this will roll once on each of the registered non-private tables and report the results.  I've found it most useful when testing notable refactoring; namely how I handle the =:roller= slot for a =random-table=.
 
 * Updates
 
