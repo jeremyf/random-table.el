@@ -495,40 +495,40 @@ There are four primary functions:
   (cl-defstruct random-table
     "The definition of a structured random table.
 
-  I roll the dice, filter the results, and fetch from the table.
-  The `random-table/evaluate/table' defines the steps we take to
-  \"roll on the table.\"
+    I roll the dice, filter the results, and fetch from the table.
+    The `random-table/evaluate/table' defines the steps we take to
+    \"roll on the table.\"
 
-  The slots are:
+    The slots are:
 
-  - :name :: the human readable and reference-able name (used for
-	     completing read and the key for the table storage).
-  - :data :: the tabular data, often as a list of strings.  By
-	     design, those list of strings can have interpolation
-	     (e.g. \"${2d6}\" both of dice structures but also of
-	     other tables.
-  - :roller :: this is what we roll, see `random-table/roll-on'
-  - :filter :: function to filter the list of dice.
+    - :name :: the human readable and reference-able name (used for
+	       completing read and the key for the table storage).
+    - :data :: the tabular data, often as a list of strings.  By
+	       design, those list of strings can have interpolation
+	       (e.g. \"${2d6}\" both of dice structures but also of
+	       other tables.
+    - :roller :: this is what we roll, see `random-table/roll-on'
+    - :filter :: function to filter the list of dice.
 
-  - :fetcher :: function that takes two positional arguments (see
-		`random-table/fetcher/default'.); it is used to
-		fetch the correct entry from the table.
-  - :exclude-from-prompt :: when true, ignore the prefix arg for
-			    prompting for dice roll. (see
-			    `random-table/roller')
-  - :private :: when true, do not show in list of rollable tables.
+    - :fetcher :: function that takes two positional arguments (see
+		  `random-table/fetcher/default'.); it is used to
+		  fetch the correct entry from the table.
+    - :exclude-from-prompt :: when true, ignore the prefix arg for
+			      prompting for dice roll. (see
+			      `random-table/roller')
+    - :private :: when true, do not show in list of rollable tables.
 
-  - :store :: When non-nil, we store the roller's value for the
-	      duration of the table evaluation.  Useful for when
-	      you have one roll that you use for multiple tables.
-  - :reuse :: the :name of a table's stored dice results.
+    - :store :: When non-nil, we store the roller's value for the
+		duration of the table evaluation.  Useful for when
+		you have one roll that you use for multiple tables.
+    - :reuse :: the :name of a table's stored dice results.
 
-  About :reuse and :store
+    About :reuse and :store
 
-  There are cases where we want to use one set of dice roles.  For
-  example, in the \"Oracle (Black Sword Hack)\" table we roll dice
-  and use those dice results to determine both the answer as well
-  as whether there are unexpected events.  All from the same roll."
+    There are cases where we want to use one set of dice roles.  For
+    example, in the \"Oracle (Black Sword Hack)\" table we roll dice
+    and use those dice results to determine both the answer as well
+    as whether there are unexpected events.  All from the same roll."
     name
     data
     (roller #'random-table/roller/default)
@@ -540,7 +540,22 @@ There are four primary functions:
     (private nil)
     (store nil)
     (reuse nil))
+#+end_src
 
+Given that there is more than one table, we need to store these tables in memory.  
+
+  #+begin_src emacs-lisp :tangle "random-table.el" :results none 
+  (defvar random-table/storage/tables
+    (make-hash-table :test 'equal)
+    "A hash-table of random tables.
+
+  The hash key is the \"human readable\" name of the table (as a symbol).
+  The hash value is the contents of the table.")
+#+end_src
+
+We don’t want to allow for any “random” name for tables.  We can also do some pre-processing on that table.
+
+  #+begin_src emacs-lisp :tangle "random-table.el" :results none
   (cl-defun random-table/register
       (&rest kws &key name data exclude-from-prompt &allow-other-keys)
     "Store the DATA, NAME, and all given KWS in a `random-table'."
@@ -1056,13 +1071,6 @@ See `random-table/reporter'."
 	table
       (unless allow_nil
 	(error "Could not find table %s; use `random-table/register'" value))))
-
-  (defvar random-table/storage/tables
-    (make-hash-table :test 'equal)
-    "A hash-table of random tables.
-
-  The hash key is the \"human readable\" name of the table (as a symbol).
-  The hash value is the contents of the table.")
 
   (defun random-table/roll-on (table &optional roller)
     "Roll on the TABLE with the ROLLER.
