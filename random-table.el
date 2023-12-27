@@ -95,6 +95,10 @@ as whether there are unexpected events.  All from the same roll."
 			  :data (-list data) kws)))
       (puthash name struct random-table/storage/tables))))
 
+(defun random-table/coerce-input (text)
+  "Coerce initial TEXT to wrap in \"{\" \"}\" brackets."
+  (if (string-match-p "{" text) text (concat "{" text "}")))
+
 ;;;; Interactive
 ;;;###autoload
 (defun random-table/roll (text)
@@ -121,14 +125,10 @@ hash table to `random-table/storage/results'."
 				      ;; tables.
 				      (lambda (name table &rest args)
 					(not (random-table-private table))))))
-  (setq random-table/storage/results (make-hash-table :test 'equal))
-  ;; TODO: Consider allowing custom reporter as a function.  We already
-  ;; register it in the general case.
-  (let ((result (funcall random-table/reporter
-			 text
-			 (random-table/parse text))))
-    (setq random-table/storage/results nil)
-    result))
+  (let ((random-table/storage/results (make-hash-table :test 'equal)))
+    (funcall random-table/reporter
+	     text
+	     (random-table/parse (random-table/coerce-input text)))))
 
 ;;;###autoload
 (defun random-table/roll-region (&optional prefix)
@@ -138,7 +138,8 @@ When PREFIX is given replace the marked text."
   (interactive "P")
   (let ((random-table/reporter/format-function (lambda (e r) (format "%s" r)))
 	(random-table/reporter #'random-table/reporter/as-kill-and-message)
-	(text (if (region-active-p)
+	(text (random-table/coerce-input
+	       (if (region-active-p)
 		  (buffer-substring-no-properties
 		   (region-beginning) (region-end))
 		(apply #'buffer-substring-no-properties
@@ -148,7 +149,7 @@ When PREFIX is given replace the marked text."
 			 (let ((beg (point)))
 			   (goto-char (point-at-eol))
 			   (skip-syntax-backward " " (point-at-bol))
-			   (list beg (point)))))))
+			   (list beg (point))))))))
 	(current-prefix-arg nil))
     (let ((result (random-table/roll text)))
       (when (and prefix (region-active-p))
@@ -332,7 +333,6 @@ Examples:
 (defcustom random-table/text-replacer-functions
   '(random-table/text-replacer-function/current-roll
     random-table/text-replacer-function/dice-expression
-    random-table/text-replacer-function/from-interactive-prompt
     random-table/text-replacer-function/named-table
     random-table/text-replacer-function/inner-table
     random-table/text-replacer-function/table-math)
@@ -464,7 +464,8 @@ See `random-table/reporter'."
   (with-current-buffer (or buffer (current-buffer))
     (end-of-line)
     (insert (funcall random-table/reporter/format-function
-		     expression results))))
+		     expression results))
+    (insert "\n")))
 
 (cl-defun random-table/fetch (value &key allow_nil)
   "Coerce the given VALUE to a registered `random-table'.
@@ -597,15 +598,11 @@ When ROLL is not given, choose a random element from the TABLE."
   "Evaluate the random TABLE, optionally using the given ROLLER.
 
 See `random-table' structure."
-  (let* ((rolled (random-table/evaluate/table/roll table roller)))
+  (let ((random-table/current-roll (random-table/evaluate/table/roll table roller)))
     ;; TODO: This is wildly naive.  Perhaps the current_roll needs to be
     ;; replaced with the "${Current Roll for [My Tablename]}".  Then we can
     ;; Cache that rolled value and retrieve it.
-    (setq random-table/current-roll rolled)
-    (let ((results (random-table/evaluate/table/fetch-rolled-value
-		    table rolled)))
-      (setq random-table/current-roll nil)
-      results)))
+    (random-table/evaluate/table/fetch-rolled-value table random-table/current-roll)))
 
 (defun random-table/evaluate/table/roll (table &optional roller)
   "Roll on the TABLE, conditionally using ROLLER.
@@ -618,8 +615,7 @@ use those dice to lookup on other tables."
 	 (or (when-let ((reuse-table-name (random-table-reuse table)))
 	       (or
 		(random-table/storage/results/get-rolled-value reuse-table-name)
-		(random-table/roll-on
-		 (random-table/fetch reuse-table-name) roller)))
+		(random-table/roll-on (random-table/fetch reuse-table-name) roller)))
 	     (random-table/roll-on table roller))))
     (when (random-table-store table)
       (random-table/storage/results/put-rolled-value
@@ -631,9 +627,8 @@ use those dice to lookup on other tables."
   (let* ((table (random-table/fetch table))
 	 (data (random-table-data table))
 	 (filtered (apply (random-table-filter table) (-list rolled)))
-	 (row (if filtered
-		  (funcall (random-table-fetcher table) data (-list filtered))
-		nil)))
+	 (row (apply (random-table-fetcher table) data (-list filtered))))
+
     (or (when row (random-table/parse row)) "")))
 
 (defun random-table/completing-read/alist (prompt alist &rest args)
