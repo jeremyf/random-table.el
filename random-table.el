@@ -371,8 +371,8 @@ See `random-table' for discussion about storage and reuse.")
 (defun random-table/storage/results/get-rolled-value (name)
   (gethash name random-table/storage/results))
 
-(defvar random-table/dice/regex
-  "^\\([0-9]*\\)?d\\([0-9]*\\)\\([+-][0-9]*\\)?")
+(setq random-table/dice/regex
+  "^\\([0-9]*\\)?d\\([0-9]+\\)\\([+-][0-9]*\\)?")
 
 ;;; Dice String Evaluator
 ;;
