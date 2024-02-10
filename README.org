@@ -43,10 +43,9 @@ I have tested this using Emacs v29.1; it might work with earlier versions.
 
 ** Dependencies
 
-I make use of the ubiquitous =s= package (See https://melpa.org/#/s) (as of <2023-08-21 Mon> that is for =s-trim=).
+I have tested this package with Emacs 29.1.  It might work with earlier versions.  Otherwise, there are no external dependencies.
 
-Originally, I relied on =org-d20= for dice rolling, but extracted the minimum viable logic for interpolating dice rolls (e.g. Evaluate “There are {1d4} doors.” to roll one four-sided die and message the string “There are 3 doors.”)
-
+In prior iterations, I used the =s= package (See https://melpa.org/#/s) but I have since removed that dependency.
 
 * TODO Usage
 
@@ -81,6 +80,8 @@ When we “roll” on that table, when we get the “Coin and…” result, we�
 ** Replacement Functions
 
 In the above case the “Coin and it comes up {Coin Toss}.” replacement relies on the =random-table/text-replacer-functions=; in particular the =random-table/text-replacer-function/named-table=; which looks at the text between ={= and =}= and then uses the value between to lookup a registered table.
+
+Customize the =random-table/text-replacer-functions= to have different strategies for replacing text.  For example, I don’t automatically replace dice expression (e.g. “There are 2d4 ogres” does not roll the 2d4 unless it is between ={= and =}=.)
 
 ** Inner Tables
 

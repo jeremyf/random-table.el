@@ -26,6 +26,7 @@
 ;;
 ;;; Code:
 
+;;;; Defining a Table and Registering It
 (cl-defstruct random-table
   "The definition of a structured random table.
 
@@ -95,10 +96,6 @@ as whether there are unexpected events.  All from the same roll."
 			  :data (-list data) kws)))
       (puthash name struct random-table/storage/tables))))
 
-(defun random-table/coerce-input (text)
-  "Coerce initial TEXT to wrap in \"{\" \"}\" brackets."
-  (if (string-match-p "{" text) text (concat "{" text "}")))
-
 ;;;; Interactive
 ;;;###autoload
 (defun random-table/roll (text)
@@ -156,6 +153,11 @@ When PREFIX is given replace the marked text."
 	  (delete-region (region-beginning) (region-end))
 	  (insert result)))))
 
+(defun random-table/coerce-input (text)
+  "Coerce initial TEXT to wrap in \"{\" \"}\" brackets."
+  (if (string-match-p "{" text) text (concat "{" text "}")))
+
+;;;; Defining a Prompt and Storing it
 (cl-defun random-table/prompt (name &key type range default)
   "Prompt for the given NAME.
 
@@ -182,6 +184,19 @@ that result."
       (random-table/storage/results/put-rolled-value name value)
       value)))
 
+
+(defun random-table/completing-read/alist (prompt alist &rest args)
+  "Like `completing-read' but PROMPT to find value in given ALIST.
+
+ARGS are passed to `completing-read'."
+  (alist-get (apply #'completing-read prompt alist args)
+	     alist nil nil #'string=))
+
+(defun random-table/completing-read/integer-range (prompt range)
+  "Like `completing-read' but PROMPT to find integer value in RANGE."
+  (let ((strings (mapcar #'number-to-string range)))
+    (string-to-number (completing-read prompt strings nil t))))
+
 (defvar random-table/prompt/registry
   (make-hash-table :test 'equal)
   "Stores the prompts registered by `random-table/prompt/register'.")
@@ -192,6 +207,7 @@ that result."
 (defun random-table/prompt/put (name value)
   (puthash name value random-table/prompt/registry))
 
+;;;; Text Replacement
 (cl-defmacro random-table/create-text-replacer-function
     (docstring &key name replacer regexp)
   "Create NAME function as a text REPLACER for REGEXP.
@@ -357,6 +373,7 @@ of the functions listed in `random-table/text-replacer-functions'."
 	       random-table/text-replacer-functions
 	       :initial-value given-text)))
 
+;;;; Storing the Rolled Results of Tables
 (defvar random-table/storage/results
   (make-hash-table :test 'equal)
   "An ephemeral storage for various results of rolling.
@@ -370,6 +387,12 @@ See `random-table' for discussion about storage and reuse.")
 
 (defun random-table/storage/results/get-rolled-value (name)
   (gethash name random-table/storage/results))
+
+(defun random-table/storage/results/get-text-for-roll (name)
+  "Find the data for the given table NAME."
+  (let ((rolled-value (random-table/storage/results/get-rolled-value name))
+	(table (random-table/fetch name)))
+    (random-table/evaluate/table/fetch-rolled-value table rolled-value)))
 
 (setq random-table/dice/regex
   "^\\([0-9]*\\)?d\\([0-9]+\\)\\([+-][0-9]*\\)?")
@@ -422,6 +445,7 @@ See `random-table' for discussion about storage and reuse.")
       (setq amount (+ amount 1 (random faces))))
     amount))
 
+;;;; Reporting Results of Dice Rolls
 (defcustom random-table/reporter
   #'random-table/reporter/as-kill-and-message
   "The function takes two positional parameters:
@@ -544,9 +568,12 @@ See `random-table'."
   (let ((func (car seq))
 	(rolls (mapcar
 		(lambda (text)
-		  (let ((value (if (random-table/prompt/get text)
-				   (random-table/prompt text)
-				 (random-table/roller/string text))))
+		  (let ((value
+			 (if (random-table/prompt/get text)
+			     (random-table/prompt text)
+			   (if (random-table/fetch text :allow_nil t)
+			       (random-table/text-replacer-function/from-interactive-prompt text)
+			     (random-table/roller/string text)))))
 		    (string-to-number (format "%s" value))))
 		(cdr seq))))
     (apply func rolls)))
@@ -630,20 +657,6 @@ use those dice to lookup on other tables."
 	 (row (apply (random-table-fetcher table) data (-list filtered))))
 
     (or (when row (random-table/parse row)) "")))
-
-(defun random-table/completing-read/alist (prompt alist &rest args)
-  "Like `completing-read' but PROMPT to find value in given ALIST.
-
-ARGS are passed to `completing-read'."
-  (alist-get (apply #'completing-read prompt alist args)
-	     alist nil nil #'string=))
-
-(defun random-table/completing-read/integer-range (prompt range)
-  "Like `completing-read' but PROMPT to find integer value in RANGE."
-  (let ((strings (mapcar #'number-to-string range)))
-    (string-to-number (completing-read prompt strings nil t))))
-
-
 
 (defun random-table/roll/test-all ()
   "A convenience function to test all of the public `random-table' entries."
