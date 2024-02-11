@@ -534,9 +534,13 @@ the configured roller.
 See `random-table'."
   (if-let ((roller (or roller (random-table-roller table))))
       (cond
-       ((functionp roller) (funcall roller table))
-       ((stringp roller) (random-table/roller/string roller))
-       ((seqp roller) (random-table/roller/seq roller))
+       ((functionp roller)
+	(funcall roller table))
+       ((or (stringp roller)
+	    (numberp roller))
+	(random-table/roller/string roller))
+       ((seqp roller)
+	(random-table/roller/seq roller))
        (_ (user-error "Unable to handle %S roller for %s table"
 		      roller
 		      (random-table-name table))))
@@ -553,28 +557,29 @@ See `random-table'."
 			     faces (random-table-name table)))
       (+ 1 (random faces)))))
 
-(defun random-table/roller/string (text)
-  "Interpolate given TEXT as a roller."
-  (if (or (string= "d66" (string-trim text))
-	  (string-match-p random-table/dice/regex text))
-      (if current-prefix-arg
-	  (read-number (format "Roll %s: " text))
-	(string-to-number
-	 (format "%s" (random-table/dice/roll (string-trim text)))))
-    (random-table/parse text)))
+(defun random-table/roller/string (string)
+  "Interpolate given STRING as a roller."
+  (cond
+   ((numberp string) (format "%s" string))
+   ((random-table/prompt/get string)
+    (random-table/prompt string))
+   ((when-let ((table (random-table/fetch string :allow_nil t)))
+    (random-table/roll-on table)))
+   ((or (string= "d66" (string-trim string))
+	(string-match-p random-table/dice/regex string))
+    (if current-prefix-arg
+	(read-number (format "Roll %s: " string))
+      (string-to-number
+       (format "%s" (random-table/dice/roll (string-trim string))))))
+   (t (random-table/parse string))))
 
 (defun random-table/roller/seq (seq)
   "Interpolate given SEQ as a roller."
   (let ((func (car seq))
 	(rolls (mapcar
 		(lambda (text)
-		  (let ((value
-			 (if (random-table/prompt/get text)
-			     (random-table/prompt text)
-			   (if (random-table/fetch text :allow_nil t)
-			       (random-table/text-replacer-function/from-interactive-prompt text)
-			     (random-table/roller/string text)))))
-		    (string-to-number (format "%s" value))))
+		  (string-to-number
+		   (format "%s" (random-table/roller/string text))))
 		(cdr seq))))
     (apply func rolls)))
 
