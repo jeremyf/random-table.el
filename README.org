@@ -15,8 +15,14 @@ I’ve been blogging about this in my [[https://takeonrules.com/series/emacs-ran
 You may also find [[https://github.com/jeremyf/dotemacs/blob/main/emacs.d/random-tables-data.el][my random-tables-data.el]] useful for what I’ve been setting up.
 
 * Introduction
+:PROPERTIES:
+:ID:       B6843B47-CD8E-475B-82E7-A9B14A1027D8
+:END:
 
 ** Features
+:PROPERTIES:
+:ID:       4E7167E0-3D7C-4FEA-A503-8178B3BF8D26
+:END:
 
 - Composing Tables :: The results of one table could be to roll on another table or tables; and so on.
 - Cached Results :: Some dice rolls inform later dice rolls.  There’s a mechanism to do that; though it likely needs improvement.
@@ -31,6 +37,9 @@ You may also find [[https://github.com/jeremyf/dotemacs/blob/main/emacs.d/random
 And more.
 
 ** Installation
+:PROPERTIES:
+:ID:       418C7AB2-574A-4D8A-8D34-E9C92AFF0777
+:END:
 
 As of <2023-08-21 Mon> this repository is not yet part of any of the package archive (e.g. https://melpa.org).  But you can install it via =use-package=.
 
@@ -42,14 +51,23 @@ As of <2023-08-21 Mon> this repository is not yet part of any of the package arc
 I have tested this using Emacs v29.1; it might work with earlier versions.
 
 ** Dependencies
+:PROPERTIES:
+:ID:       851DAE52-C59B-42DF-95DB-EF902CCE729D
+:END:
 
 I have tested this package with Emacs 29.1.  It might work with earlier versions.  Otherwise, there are no external dependencies.
 
 In prior iterations, I used the =s= package (See https://melpa.org/#/s) but I have since removed that dependency.
 
 * TODO Usage
+:PROPERTIES:
+:ID:       557DCD61-9B39-4B53-92A7-CB24D4453ADA
+:END:
 
 ** Defining Tables
+:PROPERTIES:
+:ID:       6232ABA4-840B-462E-8778-3CDC80BB33C0
+:END:
 
 I type =M-x random-table/roll= and am prompted to give an Expression.  I can select from a pre-populated list of registered tables (via =random-table/register=).  Or I can enter an expression, such as “2d6+1” and =random-table/roll= will then evaluate the expression.
 
@@ -78,16 +96,27 @@ In fact we could register a new table:
 When we “roll” on that table, when we get the “Coin and…” result, we’ll evaluate rolling on the Coin Toss table.  The end result is “Coin and it comes up Heads.”
 
 ** Replacement Functions
+:PROPERTIES:
+:ID:       A2592C2E-A0B6-4712-8D60-F2AFC97A25A0
+:END:
 
 In the above case the “Coin and it comes up {Coin Toss}.” replacement relies on the =random-table/text-replacer-functions=; in particular the =random-table/text-replacer-function/named-table=; which looks at the text between ={= and =}= and then uses the value between to lookup a registered table.
 
 Customize the =random-table/text-replacer-functions= to have different strategies for replacing text.  For example, I don’t automatically replace dice expression (e.g. “There are 2d4 ogres” does not roll the 2d4 unless it is between ={= and =}=.)
 
+However you could configure the replacer functions to allows expand dice expressions.
+
 ** Inner Tables
+:PROPERTIES:
+:ID:       7ADB0EFD-6339-4C99-B77B-5153DC5AA91C
+:END:
 
 Instead of relying on a custom table for a coin toss, we could call =M-x random-table/roll= and provide “[heads/tails]”.  This syntax leverages the =random-table/text-replacer-function/inner-table= logic; that is interpret an inner table.  We take the text between =[= and =]= and pick one of the elements; elements are separated by a slash (e.g. =/=) character.
 
 ** Custom Rollers
+:PROPERTIES:
+:ID:       CCAE67EB-9125-4167-ABE1-A734320A325A
+:END:
 
 We can also create ranges, but will need to consider the roller:
 
@@ -154,6 +183,9 @@ The above will add the results of rolling “2d6” to the prompt for the charac
 As of <2023-09-18 Mon> , I am considering how I might represent/parse: ='(+ "2d6" (read-number "Charisma Bonus: "))=; I'm uncertain about that syntax compared to what I see as the more legible ='(+ "2d6" "Charisma Bonus")=; albeit with the need to create a prompt.
 
 ** Private Tables
+:PROPERTIES:
+:ID:       6438C2A0-3F99-431A-86BC-47CA4109A10E
+:END:
 
 As you register tables, via =random-table/register=, you add them to the table registry.  The list of tables shown in the =M-x random-table/roll= can become quite lengthy.  To register a table, without adding it to the selection list, add =:private t= as one of the key word arguments.
 
@@ -177,6 +209,9 @@ Below is the “Name” table.  When we roll on the “Name” table we’ll pic
 #+end_src
 
 ** Storing Results for Later Use
+:PROPERTIES:
+:ID:       9B31F1E2-2061-470D-99E3-C08A865553D0
+:END:
 
 Given the composition of tables, we may also want to store the results of the roll for future reference.  Why might we do this?  Some tables may say “Roll 3 dice.  Then on table one use the highest value.  And on table two use the lowest value.  And on table three, if there are doubles, use the number that is the “double”.
 
@@ -217,6 +252,9 @@ The general flow is:
 That flow is defined in =random-table/evaluate/table=.
 
 ** Encoding a Complex New Table
+:PROPERTIES:
+:ID:       904AC9DB-7A7C-4723-A993-5A84E9193E5A
+:END:
 
 I set about encoding the /Death and Dismemberment/ rules for my Random Table package.
 
@@ -343,6 +381,9 @@ Head Injury; Rolled 12
 The modified d12 roll resulted in a 12; hence the +12 day(s).
 
 ** Prompting for You to Roll the dice
+:PROPERTIES:
+:ID:       24926AAD-2841-4CAD-A2B5-B595228F06C4
+:END:
 
 Let’s create a quick table:
 
@@ -362,12 +403,18 @@ Given that I passed the universal prefix arg (e.g. =C-u=) when I roll on the =Ra
 In this way, you can roll the dice and use this package to encode the rules lookup.
 
 ** Exclude a Table from Prompting for a Roll
+:PROPERTIES:
+:ID:       4843CF67-5679-4E98-98B0-2D72187D0AE8
+:END:
 
 Any table that has one element in =:data= will not prompt for the roll.  Also, you can specify =:exclude-from-prompt t= when registering a table; then any “rolls” on that specific table will not prompt to give the dice value.
 
 Ultimately, the goal is to ask for dice rolls when they might be something the player wants to roll.
 
 ** Allow for Rudimentary Math Operands with Table Results
+:PROPERTIES:
+:ID:       16484E3E-0D77-445A-9398-E57E6D32C949
+:END:
 
 In my quest for more random tables and functionality, I worked through Errant’s Hiring Retainers section.  Using the PC’s presence, you look-up the morale base.  Then roll 2d6, modified by the offer’s generosity, to then determine the modifier to the morale base.
 
@@ -427,6 +474,9 @@ The ={[Henchman > Morale Base] + [Henchman > Morale Variable]}= does the followi
 #+end_src
 
 ** Registering Prompts
+:PROPERTIES:
+:ID:       BEB50E24-89D2-4B9E-9FBF-05E908E16010
+:END:
 
 Similar to =random-table/roller=, you can register a prompt via =random-table/prompt=.  There are common prompts (e.g. “Charisma Modifier”).  In registering a prompt, during an invocation of =random-table/roll= each prompt will only be requested once.  That is to say, the package will cache the prompt’s response and re-use that through out the roll.
 
@@ -443,16 +493,74 @@ This functionality leverages the per =random-table/roll= cache (as stored in the
 				      (random-table/roller/2d6))))
 #+end_src
 
-Why include the caching?  In reviewing Kevin Crawford’s [Scarlet Heroes](https://www.drivethrurpg.com/product/127180/Scarlet-Heroes?affiliate_id=318171) there’s a table for reaction rolls that asks for a few modifiers, the rolls on one table, and one result is to roll on another table using those same modifiers.
+Why include the caching?  In reviewing Kevin Crawford’s [[https://www.drivethrurpg.com/product/127180/Scarlet-Heroes?affiliate_id=318171][Scarlet Heroes]] there’s a table for reaction rolls that asks for a few modifiers, the rolls on one table, and one result is to roll on another table using those same modifiers.
+
+*** Expressing the =:roller= as a list for computation
+:PROPERTIES:
+:ID:       91F255D2-F99B-4668-AFC8-446860620A83
+:END:
+
+Instead of expressing the =:roller= as a =lambda=, you can express it as a list.  The following is equivalent to the prior example:
+
+#+begin_src emacs-lisp
+    (random-table/prompt "Charisma Modifier"
+  		       :type #'read-number
+  		       :default 0)
+
+    (random-table/register :name "Reaction Roll"
+  			 :roller '(+ "2d6" "Charisma Modifier"))
+#+end_src
+
+As of =v0.7.0= you can include a registered table in a roller.
+
+Consider the following table derived from [[https://preview.drivethrurpg.com/en/product/397322/1520-hre-2d6-adventure-in-the-holy-roman-empire?affiliate_id=318171][1520 HRE: 2d6 Adventure in the Holy Roman Empire]].
+
+#+begin_src emacs-lisp
+  (random-table/register :name "SOC"
+    :roller "2d6"
+    :reuse "SOC"
+    :store t
+    :data '(((2 . 7) . "{CURRENT_ROLL}")
+             ((8 . 12) . "{CURRENT_ROLL} (EDU + 1)")))
+#+end_src
+
+In the above, a character’s Social (/SOC/) attribute affects their /EDU/ attribute.  Rolling an 8 or higher on /SOC/ adds one to their Education (/EDU/).
+
+#+begin_src emacs-lisp
+  (random-table/register :name "EDU modifier from SOC"
+    :reuse "SOC"
+    :private t
+    :exclude-from-prompt t
+    :filter (lambda (&rest dice) (if (>= (car dice) 8) 0 1))
+    :data '(0 1))
+
+  (random-table/register :name "EDU"
+    :roller '(+ "2d6" "EDU modifier from SOC")
+    :store t
+    :data '(2 3 4 5 6 7 8 9 10 11 12 13))
+#+end_src
+
+The “EDU modifier from SOC” table encodes the +1 /EDU/ from /SOC/.  And the =:roller= for /EDU/ references the filtered value in the “EDU modifier for SOC”.
+
+*Note:* As of the =v0.7.0= I still need to write the possible range for dice rolls.  Not ideal and something I’ll fix for =v0.8.0=.
 
 ** Testing All of This
+:PROPERTIES:
+:ID:       C5A1F3B4-191D-4417-8D3C-CD10C24570C2
+:END:
 
 I have added the non-interactive =random-table/roll/test-all= function; this will roll once on each of the registered non-private tables and report the results.  I've found it most useful when testing notable refactoring; namely how I handle the =:roller= slot for a =random-table=.
 
 
 * Updates
+:PROPERTIES:
+:ID:       142A2606-C381-482D-937B-CC035EEAA968
+:END:
 
 ** 2023-12-02 Update
+:PROPERTIES:
+:ID:       9F0F6B2C-15CD-4613-96EE-86F126CFBD41
+:END:
 
 During [[https://emacsconf.org/2023/][Emacs Conf 2023]] I watched Howard Abrams’s presentation [[https://emacsconf.org/2023/talks/solo/][How I play TTRPGs in Emacs]].  And I suspect I’ll be migrating to that.  What I have works well, but there’s quite a bit I’m loving about what I saw.  In particular, having the tables be their own files creates several affordances.  Namely sharing those text-based files and repurposing plain-text.
 
@@ -461,6 +569,9 @@ Also, if I’m going to spend effort on the functionality, I’d love to be coll
 My plan is to start converting my tabular data to the plain text formats of the [[https://gitlab.com/howardabrams/emacs-rpgdm][rpgdm package]].
 
 ** 2023-12-17 Update
+:PROPERTIES:
+:ID:       3FDFA230-3AEF-47BC-A187-F3873E3F1FF8
+:END:
 
 I have looked at Howard Abram’s [[https://gitlab.com/howardabrams/emacs-rpgdm][rpgdm package]] and later [[https://codeberg.org/howardabrams/emacs-rpgtk/][rpgtk package]] for inspiration and adoption consideration.  However, I have settled on my current approach.  In part due to the feature comparisons:
 
