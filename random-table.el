@@ -659,8 +659,7 @@ use those dice to lookup on other tables."
   (let* ((table (random-table/fetch table))
 	 (data (random-table-data table))
 	 (filtered (apply (random-table-filter table) (-list rolled)))
-	 (row (apply (random-table-fetcher table) data (-list filtered))))
-
+	 (row (funcall (random-table-fetcher table) data (-list filtered))))
     (or (when row (random-table/parse row)) "")))
 
 (defun random-table/roll/test-all ()
