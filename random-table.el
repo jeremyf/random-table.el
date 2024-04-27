@@ -65,6 +65,7 @@ example, in the \"Oracle (Black Sword Hack)\" table we roll dice
 and use those dice results to determine both the answer as well
 as whether there are unexpected events.  All from the same roll."
   name
+  ;; TODO: Allow for data to be the results of the fetched roll.
   data
   (roller #'random-table/roller/default)
   ;; TODO: Filter should take a table
@@ -133,7 +134,7 @@ hash table to `random-table/storage/results'."
 
 When PREFIX is given replace the marked text."
   (interactive "P")
-  (let ((random-table/reporter/format-function (lambda (e r) (format "%s" r)))
+  (let ((random-table/reporter/format-function #'random-table/reporter/format-function-roll-only)
 	(random-table/reporter #'random-table/reporter/as-kill-and-message)
 	(text (random-table/coerce-input
 	       (if (region-active-p)
@@ -446,21 +447,14 @@ See `random-table' for discussion about storage and reuse.")
     amount))
 
 ;;;; Reporting Results of Dice Rolls
-(defcustom random-table/reporter
+(defvar random-table/reporter
   #'random-table/reporter/as-kill-and-message
   "The function takes two positional parameters:
 
 - EXPRESSION :: The text to evaluate for \"rolling\"
 - RESULT :: The results of those rolls.
 
-See `random-table/reporter/as-kill-and-message'."
-  :group 'random-table
-  :package-version '(random-table . "0.1.0")
-  :type '(choice
-	  (function-item :tag "Kill and Message"
-			 random-table/reporter/as-kill-and-message)
-	  (function-item :tag "Insert"
-			 random-table/reporter/as-insert)))
+See `random-table/reporter/as-kill-and-message'.")
 
 (defvar random-table/reporter/format-function
   (lambda (expression results) (format "- %s :: %s" expression results))
@@ -471,6 +465,10 @@ See `random-table/reporter/as-kill-and-message'."
 	      their rolled results.
 
 I structure my results in an `org-mode' definition list format.")
+
+(defun random-table/reporter/format-only-roll (_expression results)
+  "Print only the RESULTS."
+  (format "%s" results))
 
 (defun random-table/reporter/as-kill-and-message (expression results)
   "Report RESULTS of EXPRESSION as `message' and `kill'.
