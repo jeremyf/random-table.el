@@ -544,7 +544,7 @@ The “EDU modifier from SOC” table encodes the +1 /EDU/ from /SOC/.  And the 
 
 *Note:* As of the =v0.7.0= I still need to write the possible range for dice rolls.  Not ideal and something I’ll fix for =v0.8.0=.
 
-** A Table’s Label and Option(S)
+** A Table’s Label and Option(s)
 :PROPERTIES:
 :ID:       F08D84EB-27BE-409A-A645-57F462C8C1A8
 :END:
@@ -570,6 +570,21 @@ The syntax is ={<TABLE_NAME> @label}= to =apply= the =:label= function.
 For parsing =:options= you can use ={<TABLE_NAME> @options}= for multi-select and
 ={<TABLE_NAME> @option}= for singular select.  The parsed options are prefixed
 with =\n\t=.
+
+Let’s say we roll on the /The One Ring > Lore/ table ask the following question: “What are the orcs doing?”.  We then choose the “Action” option which will roll on the /The One Ring > Lore Table > Action/.  Which would output something similar to the following:
+
+#+begin_example
+What are the orcs doing?
+- Action :: Chase
+#+end_example
+
+Were we to select “Action” and “Focus” we’d get something similar to the following output:
+
+#+begin_example
+What are the orcs doing?
+- Action :: Chase
+- Focus :: Luck
+#+end_example
 
 ** Testing All of This
 :PROPERTIES:
