@@ -544,13 +544,39 @@ The “EDU modifier from SOC” table encodes the +1 /EDU/ from /SOC/.  And the 
 
 *Note:* As of the =v0.7.0= I still need to write the possible range for dice rolls.  Not ideal and something I’ll fix for =v0.8.0=.
 
+** A Table’s Label and Option(S)
+:PROPERTIES:
+:ID:       F08D84EB-27BE-409A-A645-57F462C8C1A8
+:END:
+
+Below is an example of a table that will:
+
+- Prompt for a =:label=.
+- Prompt to pick one or more =:options= and from the chose options parse the
+  selected option(s).
+
+#+begin_src emacs-lisp
+  (random-table/register :name "The One Ring > Lore"
+    :data '("{The One Ring > Lore @label}{The One Ring > Lore @options}")
+    :label '(read-string "Question: ")
+    :options '(("Action" . "- Action :: {The One Ring > Lore Table > Action}")
+                ("Aspect" . "- Aspect :: {The One Ring > Lore Table > Aspect}")
+                ("Feature" . "- Feature :: {The One Ring > Lore Table > Feature}")
+                ("Focus" . "- Focus :: {The One Ring > Lore Table > Focus}")))
+#+end_src
+
+The syntax is ={<TABLE_NAME> @label}= to =apply= the =:label= function.
+
+For parsing =:options= you can use ={<TABLE_NAME> @options}= for multi-select and
+={<TABLE_NAME> @option}= for singular select.  The parsed options are prefixed
+with =\n\t=.
+
 ** Testing All of This
 :PROPERTIES:
 :ID:       C5A1F3B4-191D-4417-8D3C-CD10C24570C2
 :END:
 
 I have added the non-interactive =random-table/roll/test-all= function; this will roll once on each of the registered non-private tables and report the results.  I've found it most useful when testing notable refactoring; namely how I handle the =:roller= slot for a =random-table=.
-
 
 * Updates
 :PROPERTIES:
@@ -577,25 +603,25 @@ I have looked at Howard Abram’s [[https://gitlab.com/howardabrams/emacs-rpgdm]
 
 | Feature                                                                                                                    | RPGDM/RPGTK | random-tables |
 |----------------------------------------------------------------------------------------------------------------------------+-------------+---------------|
-| Automatic dice evaluation (e.g. “There are 2d6 giants” will always roll the 2d6)                                           | ✔           | -             |
-| Caching prompt choices; remembering the Charisma Modifier                                                                  | -           | ✔             |
-| Caching rolls for later reference                                                                                          | -           | ✔             |
-| Complex dice rollers  (e.g. 2d6 + Charisma Modifier + Situational Modifier)                                                | -           | ✔             |
-| Conditional dice evaluation (e.g. “2d6” in a table is not evaluated, but “{2d6}” is)                                       | -           | ✔             |
-| Custom reporter; configure how you report the results of a roll                                                            | -           | ✔             |
-| Evaluate text region and roll                                                                                              | -           | ✔             |
-| Evaluating dice within a result                                                                                            | ✔           | ✔             |
-| Extensible parser functions                                                                                                | -           | ✔             |
-| Inner tables (e.g. “You meet a [dragon/knight/peasant]”)                                                                   | ✔           | ✔             |
-| Lazy load tables                                                                                                           | ✔           | -             |
-| Load text tables (e.g. org-mode, plain text, markdown)                                                                     | ✔           | -             |
-| Mathematical operations of table results                                                                                   | -           | ✔             |
-| Multiline output (e.g. table results can include =\n=)                                                                       | -           | ✔             |
-| Private tables                                                                                                             | -           | ✔             |
-| Prompt for table evaluated as a “roll” (e.g. I can input “There are {2d6} [giants/frogmen/hermits]” into the table prompt) | -           | ✔             |
-| Prompting to provide own dice roll                                                                                         | -           | ✔             |
-| Results of a roll can then roll on more tables                                                                             | ✔           | ✔             |
-| Rolled dice overview; the results of each dice and the sum                                                                 | ✔           | -             |
+| Automatic dice evaluation (e.g. “There are 2d6 giants” will always roll the 2d6)                                           | ✔         | -             |
+| Caching prompt choices; remembering the Charisma Modifier                                                                  | -           | ✔           |
+| Caching rolls for later reference                                                                                          | -           | ✔           |
+| Complex dice rollers  (e.g. 2d6 + Charisma Modifier + Situational Modifier)                                                | -           | ✔           |
+| Conditional dice evaluation (e.g. “2d6” in a table is not evaluated, but “{2d6}” is)                                       | -           | ✔           |
+| Custom reporter; configure how you report the results of a roll                                                            | -           | ✔           |
+| Evaluate text region and roll                                                                                              | -           | ✔           |
+| Evaluating dice within a result                                                                                            | ✔         | ✔           |
+| Extensible parser functions                                                                                                | -           | ✔           |
+| Inner tables (e.g. “You meet a [dragon/knight/peasant]”)                                                                   | ✔         | ✔           |
+| Lazy load tables                                                                                                           | ✔         | -             |
+| Load text tables (e.g. org-mode, plain text, markdown)                                                                     | ✔         | -             |
+| Mathematical operations of table results                                                                                   | -           | ✔           |
+| Multiline output (e.g. table results can include =\n=)                                                                       | -           | ✔           |
+| Private tables                                                                                                             | -           | ✔           |
+| Prompt for table evaluated as a “roll” (e.g. I can input “There are {2d6} [giants/frogmen/hermits]” into the table prompt) | -           | ✔           |
+| Prompting to provide own dice roll                                                                                         | -           | ✔           |
+| Results of a roll can then roll on more tables                                                                             | ✔         | ✔           |
+| Rolled dice overview; the results of each dice and the sum                                                                 | ✔         | -             |
 |----------------------------------------------------------------------------------------------------------------------------+-------------+---------------|
 
 I provide the above feature comparison not to diminish the excellent work of Howard, as both of his above packages provide other dice rolling adjacent functionality as well as allow for loading plain text data as a table; a feature that should not be discredited in it’s friendliness as well as greater shareability.

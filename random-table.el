@@ -57,6 +57,9 @@ The slots are:
 	    duration of the table evaluation.  Useful for when
 	    you have one roll that you use for multiple tables.
 - :reuse :: the :name of a table's stored dice results.
+- :label: :: Add an additional label via a function.
+- :options: :: An alist with `car' as collection title and `cdr'
+               as the value to parse (as per `random-table/parse')
 
 About :reuse and :store
 
@@ -75,7 +78,9 @@ as whether there are unexpected events.  All from the same roll."
   (exclude-from-prompt nil)
   (private nil)
   (store nil)
-  (reuse nil))
+  (reuse nil)
+  (label nil)
+  (options nil))
 
 (cl-defun random-table/register
     (&rest kws &key name data exclude-from-prompt &allow-other-keys)
@@ -347,12 +352,50 @@ Examples:
 		  (random-table/evaluate/table table roller))
 	       matching-text)))
 
+(random-table/create-text-replacer-function
+ "Conditionally replace TEXT with table's label function.
+
+The label function is called via `apply'."
+ :name random-table/text-replacer-function/label
+ :regexp "{\s*\\([^@]+\\)@label\s*}"
+ :replacer (lambda (matching-text table-name)
+	     (if-let* ((table (random-table/fetch
+			       (string-trim table-name) :allow_nil t))
+		       (prompt (random-table-label table)))
+		 (apply prompt)
+	       matching-text)))
+
+(random-table/create-text-replacer-function
+ "Conditionally replace TEXT with table options."
+ :name random-table/text-replacer-function/options
+ :regexp "{\s*\\([^@]+\\)@option\\(s\\)?\s*}"
+ :replacer (lambda (matching-text table-name &optional plural)
+	     (if-let* ((table
+			(random-table/fetch
+			 (string-trim table-name) :allow_nil t))
+		       (options
+			(random-table-options table)))
+		 (let ((joiner "\n\t")
+		       (picked
+			(if plural
+			    (completing-read-multiple "Options: " options nil t)
+			  (list (completing-read "Options: " options nil t)))))
+		   (concat
+		    joiner
+		    (s-join joiner
+			    (mapcar (lambda (el)
+				      (alist-get el options nil nil #'string=))
+				      picked))))
+	       matching-text)))
+
 (defcustom random-table/text-replacer-functions
   '(random-table/text-replacer-function/current-roll
     random-table/text-replacer-function/dice-expression
     random-table/text-replacer-function/named-table
     random-table/text-replacer-function/inner-table
-    random-table/text-replacer-function/table-math)
+    random-table/text-replacer-function/table-math
+    random-table/text-replacer-function/label
+    random-table/text-replacer-function/options)
   "Functions take on string parameter and return a string.
 
 The function is responsible for finding and replacing any matches
@@ -461,8 +504,8 @@ See `random-table/reporter/as-kill-and-message'.")
   "The configured function takes two positional arguments:
 
 - expression :: the initial text provided `random-table/roll'
-- restults :: the transformed results by replacing the table declarations with
-	      their rolled results.
+- results :: the transformed results by replacing the table
+	     declarations with their rolled results.
 
 I structure my results in an `org-mode' definition list format.")
 
