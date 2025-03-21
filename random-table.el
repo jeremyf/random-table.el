@@ -2,9 +2,9 @@
 
 ;;; Metadata
 ;;
-;; Copyright (C) 2023 Jeremy Friesen
+;; Copyright (C) 2023-2025 Jeremy Friesen
 ;; Author: Jeremy Friesen <jeremy@jeremyfriesen.com>
-;; Version: 0.8.0
+;; Version: 0.9.0
 ;; Package-Requires: ((emacs "29.1"))
 ;;
 ;;; License
@@ -37,25 +37,25 @@ The `random-table/evaluate/table' defines the steps we take to
 The slots are:
 
 - :name :: the human readable and reference-able name (used for
-	   completing read and the key for the table storage).
+           completing read and the key for the table storage).
 - :data :: the tabular data, often as a list of strings.  By
-	   design, those list of strings can have interpolation
-	   (e.g. \"${2d6}\" both of dice structures but also of
-	   other tables.
+           design, those list of strings can have interpolation
+           (e.g. \"${2d6}\" both of dice structures but also of
+           other tables.
 - :roller :: this is what we roll, see `random-table/roll-on'
 - :filter :: function to filter the list of dice.
 
 - :fetcher :: function that takes two positional arguments (see
-	      `random-table/fetcher/default'.); it is used to
-	      fetch the correct entry from the table.
+              `random-table/fetcher/default'.); it is used to
+              fetch the correct entry from the table.
 - :exclude-from-prompt :: when true, ignore the prefix arg for
-			  prompting for dice roll. (see
-			  `random-table/roller')
+                          prompting for dice roll. (see
+                          `random-table/roller')
 - :private :: when true, do not show in list of rollable tables.
 
 - :store :: When non-nil, we store the roller's value for the
-	    duration of the table evaluation.  Useful for when
-	    you have one roll that you use for multiple tables.
+            duration of the table evaluation.  Useful for when
+            you have one roll that you use for multiple tables.
 - :reuse :: the :name of a table's stored dice results.
 - :label: :: Add an additional label via a function.
 - :options: :: An alist with `car' as collection title and `cdr'
@@ -88,18 +88,18 @@ as whether there are unexpected events.  All from the same roll."
   ;; We need to guard for a reserved character; which we use for operations.
   (if (string-match-p "[{}\]\[)(/\+\-\*]" name)
       (user-error (concat "Attempt to register \"%s\" table failed.  "
-			  "You cannot include the following characters:  "
-			  "\"{\", \"}\", \"[\", \"]\", \"(\", \")\", \"/\", "
-			  "\"*\", \"-\", \"+\".")
-		  name)
+                          "You cannot include the following characters:  "
+                          "\"{\", \"}\", \"[\", \"]\", \"(\", \")\", \"/\", "
+                          "\"*\", \"-\", \"+\".")
+                  name)
     (let* ((struct (apply #'make-random-table
-			  :name name
-			  ;; When there's only one possible result, don't prompt
-			  ;; the user when they chose the "I'll roll my own
-			  ;; dice" option.
-			  :exclude-from-prompt (or exclude-from-prompt
-						   (= 1 (length (-list data))))
-			  :data (-list data) kws)))
+                          :name name
+                          ;; When there's only one possible result, don't prompt
+                          ;; the user when they chose the "I'll roll my own
+                          ;; dice" option.
+                          :exclude-from-prompt (or exclude-from-prompt
+                                                   (= 1 (length (-list data))))
+                          :data (-list data) kws)))
       (puthash name struct random-table/storage/tables))))
 
 ;;;; Interactive
@@ -123,15 +123,28 @@ We report that function via `random-table/reporter'.
 With each invocation of `random-table/roll' we assign a new empty
 hash table to `random-table/storage/results'."
   (interactive (list (completing-read "Expression: "
-				      random-table/storage/tables
-				      ;; Predicate that filters out non-private
-				      ;; tables.
-				      (lambda (name table &rest args)
-					(not (random-table-private table))))))
-  (let ((random-table/storage/results (make-hash-table :test 'equal)))
-    (funcall random-table/reporter
-	     text
-	     (random-table/parse (random-table/coerce-input text)))))
+                                      random-table/storage/tables
+                                      ;; Predicate that filters out non-private
+                                      ;; tables.
+                                      (lambda (name table &rest args)
+                                        (not (random-table-private table)))
+                                      nil
+                                      (when (region-active-p)
+                                        (buffer-substring
+                                         (region-beginning)
+                                         (region-end))))))
+  (let ((random-table/storage/results
+          (make-hash-table :test 'equal))
+         (to-report
+           (funcall
+             random-table/report-formatter/function
+             text (random-table/parse (random-table/coerce-input text)))))
+    (let ((reporters
+            (if (listp random-table/reporter)
+              random-table/reporter
+              (list random-table/reporter))))
+      (dolist (reporter reporters)
+        (funcall reporter to-report)))))
 
 ;;;###autoload
 (defun random-table/roll-region (&optional prefix)
@@ -139,25 +152,25 @@ hash table to `random-table/storage/results'."
 
 When PREFIX is given replace the marked text."
   (interactive "P")
-  (let ((random-table/reporter/format-function #'random-table/reporter/format-function-roll-only)
-	(random-table/reporter #'random-table/reporter/as-kill-and-message)
-	(text (random-table/coerce-input
-	       (if (region-active-p)
-		  (buffer-substring-no-properties
-		   (region-beginning) (region-end))
-		(apply #'buffer-substring-no-properties
-		       (save-excursion
-			 (goto-char (point-at-bol))
-			 (skip-syntax-forward " " (point-at-eol))
-			 (let ((beg (point)))
-			   (goto-char (point-at-eol))
-			   (skip-syntax-backward " " (point-at-bol))
-			   (list beg (point))))))))
-	(current-prefix-arg nil))
+  (let ((random-table/report-formatter/function #'random-table/report-formatter/function-roll-only)
+        (random-table/reporter #'random-table/reporter/as-kill-and-message)
+        (text (random-table/coerce-input
+               (if (region-active-p)
+                  (buffer-substring-no-properties
+                   (region-beginning) (region-end))
+                (apply #'buffer-substring-no-properties
+                       (save-excursion
+                         (goto-char (point-at-bol))
+                         (skip-syntax-forward " " (point-at-eol))
+                         (let ((beg (point)))
+                           (goto-char (point-at-eol))
+                           (skip-syntax-backward " " (point-at-bol))
+                           (list beg (point))))))))
+        (current-prefix-arg nil))
     (let ((result (random-table/roll text)))
       (when (and prefix (region-active-p))
-	  (delete-region (region-beginning) (region-end))
-	  (insert result)))))
+          (delete-region (region-beginning) (region-end))
+          (insert result)))))
 
 (defun random-table/coerce-input (text)
   "Coerce initial TEXT to wrap in \"{\" \"}\" brackets."
@@ -172,21 +185,21 @@ Re-use the cached prompted answer or use the
 that result."
   (if type
       (random-table/prompt/put name
-			       (let ((prompt (format "%s: " name)))
-				 (cond
-				  ((eq type 'bound-integer-range)
-				   `(random-table/completing-read/integer-range
-				     ,prompt ,range))
-				  ((eq type #'read-number)
-				   `(read-number ,prompt ,default))
-				  ((eq type #'completing-read)
-				   `(random-table/completing-read/alist
-				     ,prompt ,range nil t))
-				  (t (user-error
-				      "Unknown type %s function for %s registry"
-				      type name)))))
+                               (let ((prompt (format "%s: " name)))
+                                 (cond
+                                  ((eq type 'bound-integer-range)
+                                   `(random-table/completing-read/integer-range
+                                     ,prompt ,range))
+                                  ((eq type #'read-number)
+                                   `(read-number ,prompt ,default))
+                                  ((eq type #'completing-read)
+                                   `(random-table/completing-read/alist
+                                     ,prompt ,range nil t))
+                                  (t (user-error
+                                      "Unknown type %s function for %s registry"
+                                      type name)))))
     (let ((value (or (random-table/storage/results/get-rolled-value name)
-		     (apply (random-table/prompt/get name)))))
+                     (apply (random-table/prompt/get name)))))
       (random-table/storage/results/put-rolled-value name value)
       value)))
 
@@ -196,7 +209,7 @@ that result."
 
 ARGS are passed to `completing-read'."
   (alist-get (apply #'completing-read prompt alist args)
-	     alist nil nil #'string=))
+             alist nil nil #'string=))
 
 (defun random-table/completing-read/integer-range (prompt range)
   "Like `completing-read' but PROMPT to find integer value in RANGE."
@@ -220,8 +233,8 @@ ARGS are passed to `completing-read'."
 
 - NAME: A symbol naming the replacer function.
 - REPLACER: A lambda with a number of args equal to one plus the number of
-	    capture regions of the REGEXP.  The first parameter is the original
-	    text, the rest are the capture regions of the REGEXP.
+            capture regions of the REGEXP.  The first parameter is the original
+            text, the rest are the capture regions of the REGEXP.
 - REGEXP: The regular expression to test against the given text.
 - DOCSTRING: The docstring for the newly created function.
 
@@ -230,30 +243,30 @@ This macro builds on the logic found in `s-format'"
     `(defun ,name (text)
        ,docstring
        (let ((saved-match-data (match-data)))
-	 (unwind-protect
-	     (replace-regexp-in-string
-	      ,regexp
-	      (lambda (md)
-		(let ((capture-region-text-list
-		       ;; Convert the matched data results into a list, with the
-		       ;; `car' being the original text and the `cdr' being a
-		       ;; list of each capture region.
-		       (mapcar (lambda (i) (match-string i md))
-			       (number-sequence 0 (- (/ (length (match-data)) 2)
-						     1))))
-		      (replacer-match-data (match-data)))
-		  (unwind-protect
-		      (let ((replaced-text
-			     (cond
-			      (t
-			       (set-match-data saved-match-data)
-			       (apply ,replacer capture-region-text-list)))))
-			(if replaced-text
-			    (format "%s" replaced-text)
-			  (signal 's-format-resolve md)))
-		    (set-match-data replacer-match-data))))
-	      text t t)
-	   (set-match-data saved-match-data))))))
+         (unwind-protect
+             (replace-regexp-in-string
+              ,regexp
+              (lambda (md)
+                (let ((capture-region-text-list
+                       ;; Convert the matched data results into a list, with the
+                       ;; `car' being the original text and the `cdr' being a
+                       ;; list of each capture region.
+                       (mapcar (lambda (i) (match-string i md))
+                               (number-sequence 0 (- (/ (length (match-data)) 2)
+                                                     1))))
+                      (replacer-match-data (match-data)))
+                  (unwind-protect
+                      (let ((replaced-text
+                             (cond
+                              (t
+                               (set-match-data saved-match-data)
+                               (apply ,replacer capture-region-text-list)))))
+                        (if replaced-text
+                            (format "%s" replaced-text)
+                          (signal 's-format-resolve md)))
+                    (set-match-data replacer-match-data))))
+              text t t)
+           (set-match-data saved-match-data))))))
 
 (random-table/create-text-replacer-function
  "Conditionally replace inner-table for TEXT.
@@ -267,7 +280,7 @@ This skips over inner tables that have one element (e.g. [one])."
  :name random-table/text-replacer-function/inner-table
  :regexp "\\[\\([^\]]+/[^\]]+\\)\\]"
  :replacer (lambda (matching-text inner-table)
-	     (seq-random-elt (s-split "/" inner-table))))
+             (seq-random-elt (s-split "/" inner-table))))
 
 (random-table/create-text-replacer-function
  "Conditionally perform math operation on table results for TEXT.
@@ -278,14 +291,14 @@ Examples of math operation:
  :name random-table/text-replacer-function/table-math
  :regexp "{(\\([^)]*\\))\s*\\([\-+\*]\\)\s*(\\([^)]*\\))}"
  :replacer (lambda (matching-text left-operand operator right-operand)
-	     (format "%s" (funcall
-			   (intern operator)
-			   (string-to-number
-			    (random-table/parse
-			     (string-trim left-operand)))
-			   (string-to-number
-			    (random-table/parse
-			     (string-trim right-operand)))))))
+             (format "%s" (funcall
+                           (intern operator)
+                           (string-to-number
+                            (random-table/parse
+                             (string-trim left-operand)))
+                           (string-to-number
+                            (random-table/parse
+                             (string-trim right-operand)))))))
 
 (defvar random-table/current-roll
   nil
@@ -303,7 +316,7 @@ See `random-table/current-roll'."
  :name random-table/text-replacer-function/current-roll
  :regexp "{\\(\s*CURRENT_ROLL\s*\\)}"
  :replacer (lambda (matching-text current)
-	     (or random-table/current-roll matching-text)))
+             (or random-table/current-roll matching-text)))
 
 (random-table/create-text-replacer-function
  "Conditionally replace dice-expression of TEXT.
@@ -317,7 +330,7 @@ Examples:
  :name random-table/text-replacer-function/dice-expression
  :regexp "{\s*\\([1-9][[:digit:]]*d[[:digit:]]+\\)\s*\\([+-][0-9]+\\)?\s*}"
  :replacer (lambda (matching-text dice &optional modifier)
-	     (format "%s" (random-table/dice/roll (concat dice modifier)))))
+             (format "%s" (random-table/dice/roll (concat dice modifier)))))
 
 (random-table/create-text-replacer-function
  "Conditionally replace TEXT with roll on table.
@@ -329,13 +342,13 @@ See `random-table/dice/regex' for matching dice expressions."
  :name random-table/text-replacer-function/from-interactive-prompt
  :regexp "^\\(.+\\)$"
  :replacer (lambda (matching-text table-name)
-	     (if-let ((table (random-table/fetch
-			      (string-trim table-name) :allow_nil t)))
-		 (random-table/evaluate/table table)
-	       (if (string-match-p random-table/dice/regex
-				   (string-trim matching-text))
-		   (random-table/dice/roll (string-trim matching-text))
-		 matching-text))))
+             (if-let ((table (random-table/fetch
+                              (string-trim table-name) :allow_nil t)))
+                 (random-table/evaluate/table table)
+               (if (string-match-p random-table/dice/regex
+                                   (string-trim matching-text))
+                   (random-table/dice/roll (string-trim matching-text))
+                 matching-text))))
 
 (random-table/create-text-replacer-function
  "Conditionally replace TEXT with roll on table.
@@ -346,11 +359,11 @@ Examples:
  :name random-table/text-replacer-function/named-table
  :regexp "{\s*\\([^})]+\\)\s*\\((\\([^)]+\\))\\)?\s*}"
  :replacer (lambda (matching-text table-name &optional has-roller roller)
-	     (if-let ((table (random-table/fetch
-			      (string-trim table-name) :allow_nil t)))
-		 (random-table/parse
-		  (random-table/evaluate/table table roller))
-	       matching-text)))
+             (if-let ((table (random-table/fetch
+                              (string-trim table-name) :allow_nil t)))
+                 (random-table/parse
+                  (random-table/evaluate/table table roller))
+               matching-text)))
 
 (random-table/create-text-replacer-function
  "Conditionally replace TEXT with table's label function.
@@ -359,34 +372,34 @@ The label function is called via `apply'."
  :name random-table/text-replacer-function/label
  :regexp "{\s*\\([^@]+\\)@label\s*}"
  :replacer (lambda (matching-text table-name)
-	     (if-let* ((table (random-table/fetch
-			       (string-trim table-name) :allow_nil t))
-		       (prompt (random-table-label table)))
-		 (apply prompt)
-	       matching-text)))
+             (if-let* ((table (random-table/fetch
+                               (string-trim table-name) :allow_nil t))
+                       (prompt (random-table-label table)))
+                 (apply prompt)
+               matching-text)))
 
 (random-table/create-text-replacer-function
  "Conditionally replace TEXT with table options."
  :name random-table/text-replacer-function/options
  :regexp "{\s*\\([^@]+\\)@option\\(s\\)?\s*}"
  :replacer (lambda (matching-text table-name &optional plural)
-	     (if-let* ((table
-			(random-table/fetch
-			 (string-trim table-name) :allow_nil t))
-		       (options
-			(random-table-options table)))
-		 (let ((joiner "\n\t")
-		       (picked
-			(if plural
-			    (completing-read-multiple "Options: " options nil t)
-			  (list (completing-read "Options: " options nil t)))))
-		   (concat
-		    joiner
-		    (s-join joiner
-			    (mapcar (lambda (el)
-				      (alist-get el options nil nil #'string=))
-				      picked))))
-	       matching-text)))
+             (if-let* ((table
+                        (random-table/fetch
+                         (string-trim table-name) :allow_nil t))
+                       (options
+                        (random-table-options table)))
+                 (let ((joiner "\n\t")
+                       (picked
+                        (if plural
+                            (completing-read-multiple "Options: " options nil t)
+                          (list (completing-read "Options: " options nil t)))))
+                   (concat
+                    joiner
+                    (s-join joiner
+                            (mapcar (lambda (el)
+                                      (alist-get el options nil nil #'string=))
+                                      picked))))
+               matching-text)))
 
 (defcustom random-table/text-replacer-functions
   '(random-table/text-replacer-function/current-roll
@@ -414,8 +427,8 @@ This is done by formatting the given text and passing it to each
 of the functions listed in `random-table/text-replacer-functions'."
   (let ((given-text (format "%s" text)))
     (cl-reduce (lambda (string el) (funcall el string))
-	       random-table/text-replacer-functions
-	       :initial-value given-text)))
+               random-table/text-replacer-functions
+               :initial-value given-text)))
 
 ;;;; Storing the Rolled Results of Tables
 (defvar random-table/storage/results
@@ -435,7 +448,7 @@ See `random-table' for discussion about storage and reuse.")
 (defun random-table/storage/results/get-text-for-roll (name)
   "Find the data for the given table NAME."
   (let ((rolled-value (random-table/storage/results/get-rolled-value name))
-	(table (random-table/fetch name)))
+        (table (random-table/fetch name)))
     (random-table/evaluate/table/fetch-rolled-value table rolled-value)))
 
 (setq random-table/dice/regex
@@ -450,7 +463,7 @@ See `random-table' for discussion about storage and reuse.")
   (if (string= "d66" spec-string)
       (+ (* 10 (+ 1 (random 6))) (+ 1 (random 6)))
     (apply #'random-table/dice/roll-spec
-	   (random-table/dice/parse-spec spec-string))))
+           (random-table/dice/parse-spec spec-string))))
 
 (defun random-table/dice/parse-spec (spec)
   "Convert SPEC to list:
@@ -461,26 +474,26 @@ See `random-table' for discussion about storage and reuse.")
 
   e.g. \"1d6\" -> (1 6 0) or \"2d10+2\" -> (2 10 2)"
   (when (string-match
-	 "^\\([0-9]*\\)?d\\([0-9]*\\)\\([+-][0-9]*\\)?"
-	 spec)
+         "^\\([0-9]*\\)?d\\([0-9]*\\)\\([+-][0-9]*\\)?"
+         spec)
     (list (random-table/dice/string-to-number
-	   (match-string 1 spec) 1)
-	  (random-table/dice/string-to-number
-	   (match-string 2 spec) 6)
-	  (random-table/dice/string-to-number
-	   (match-string 3 spec) 0))))
+           (match-string 1 spec) 1)
+          (random-table/dice/string-to-number
+           (match-string 2 spec) 6)
+          (random-table/dice/string-to-number
+           (match-string 3 spec) 0))))
 
 (defun random-table/dice/string-to-number (spec default)
   "Convert the SPEC (and DEFAULT) into an integer."
   (let ((n (if (stringp spec)
-	       (string-to-number spec)
-	     0)))
+               (string-to-number spec)
+             0)))
     (cond ((null spec) default)
-	  ((> n 0) n)
-	  ((string= "" spec) default)
-	  ((string= "+" spec) 0)
-	  ((string= "-" spec) 0)
-	  (t spec))))
+          ((> n 0) n)
+          ((string= "" spec) default)
+          ((string= "+" spec) 0)
+          ((string= "-" spec) 0)
+          (t spec))))
 
 (defun random-table/dice/roll-spec (number-dice faces modifier)
   "Roll the NUMBER-DICE each with FACES number of sides and add MODIFIER."
@@ -491,46 +504,63 @@ See `random-table' for discussion about storage and reuse.")
 
 ;;;; Reporting Results of Dice Rolls
 (defvar random-table/reporter
-  #'random-table/reporter/as-kill-and-message
-  "The function takes two positional parameters:
+  '(kill-new message)
+  "The function(s) that takes one positional parameter:
 
-- EXPRESSION :: The text to evaluate for \"rolling\"
-- RESULT :: The results of those rolls.
+TEXT which is created via the `random-table/report-formatter/function'.")
 
-See `random-table/reporter/as-kill-and-message'.")
-
-(defvar random-table/reporter/format-function
-  (lambda (expression results) (format "- %s :: %s" expression results))
+(defvar random-table/report-formatter/function
+  #'random-table/report-formatter/with-expression
   "The configured function takes two positional arguments:
 
 - expression :: the initial text provided `random-table/roll'
 - results :: the transformed results by replacing the table
-	     declarations with their rolled results.
+             declarations with their rolled results.
 
 I structure my results in an `org-mode' definition list format.")
 
-(defun random-table/reporter/format-only-roll (_expression results)
+(defun random-table/report-formatter/with-expression (expression results)
+  "Print expression and results using definition list format."
+  (format "- %s :: %s" expression results))
+
+(defun random-table/report-formatter/only-roll (_expression results)
   "Print only the RESULTS."
   (format "%s" results))
 
-(defun random-table/reporter/as-kill-and-message (expression results)
-  "Report RESULTS of EXPRESSION as `message' and `kill'.
+(defun random-table/reporter/as-kill-and-message (text)
+  "Report TEXT as `message' and `kill'.
 
 See `random-table/reporter'."
-  (let ((text (funcall random-table/reporter/format-function
-		       expression results)))
-    (kill-new text)
-    (message text)))
+  (kill-new text)
+    (message text))
 
-(defun random-table/reporter/as-insert (expression results &optional buffer)
+(defun random-table/reporter/as-child-window (text)
+  "Prepend RESULTS of EXPRESSION into child buffer."
+  (let ((buffer
+          (get-buffer-create "*random-table*")))
+    (with-current-buffer buffer
+      (goto-char (point-min))
+      (let ((content
+              (concat text  "\n")))
+        (insert content)
+        (pop-to-buffer buffer
+          `((display-buffer-in-side-window)
+             (side . bottom)
+             (window-width 72)
+             (window-parameters
+               (tab-line-format . none)
+               (no-delete-other-windows . t))))
+        (goto-char (point-min))
+        (when (fboundp 'pulsar--pulse)
+          (pulsar--pulse nil pulsar-highlight-face (point-min) (+ (point-min) (length content))))))))
+
+(defun random-table/reporter/as-insert (text &optional buffer)
   "Insert RESULTS of EXPRESSION into BUFFER.
 
 See `random-table/reporter'."
   (with-current-buffer (or buffer (current-buffer))
     (end-of-line)
-    (insert (funcall random-table/reporter/format-function
-		     expression results))
-    (insert "\n")))
+    (insert text "\n")))
 
 (cl-defun random-table/fetch (value &key allow_nil)
   "Coerce the given VALUE to a registered `random-table'.
@@ -544,17 +574,17 @@ in `random-table/stroage/tables' registry.
 When ALLOW_NIL is nil we raise an `error' when no table was
 found in the `random-table/stroage/tables' registry."
   (if-let ((table (cond
-		   ((random-table-p value)
-		    value)
-		   ((stringp value)
-		    (gethash value random-table/storage/tables))
-		   ((integerp value)
-		    nil)
-		   (t
-		    (error (concat "Expected %s to be a `random-table', "
-				   "`symbol', `integer', or `string' got %s")
-			   value
-			   (type-of value))))))
+                   ((random-table-p value)
+                    value)
+                   ((stringp value)
+                    (gethash value random-table/storage/tables))
+                   ((integerp value)
+                    nil)
+                   (t
+                    (error (concat "Expected %s to be a `random-table', "
+                                   "`symbol', `integer', or `string' got %s")
+                           value
+                           (type-of value))))))
       table
     (unless allow_nil
       (error "Could not find table %s; use `random-table/register'" value))))
@@ -576,26 +606,26 @@ See `random-table'."
   (if-let ((roller (or roller (random-table-roller table))))
       (cond
        ((functionp roller)
-	(funcall roller table))
+        (funcall roller table))
        ((or (stringp roller)
-	    (numberp roller))
-	(random-table/roller/string roller))
+            (numberp roller))
+        (random-table/roller/string roller))
        ((seqp roller)
-	(random-table/roller/seq roller))
+        (random-table/roller/seq roller))
        (_ (user-error "Unable to handle %S roller for %s table"
-		      roller
-		      (random-table-name table))))
+                      roller
+                      (random-table-name table))))
     (user-error "Expected given %s to have roller; got nil"
-		(random-table-name table))))
+                (random-table-name table))))
 
 (defun random-table/roller/default (table)
   "Randomly roll on the TABLE."
   ;; Constant off by one errors are likely
   (let ((faces (length (-list (random-table-data table)))))
     (if (and current-prefix-arg
-	     (not (random-table-exclude-from-prompt table)))
-	(read-number (format "Roll 1d%s for %s: "
-			     faces (random-table-name table)))
+             (not (random-table-exclude-from-prompt table)))
+        (read-number (format "Roll 1d%s for %s: "
+                             faces (random-table-name table)))
       (+ 1 (random faces)))))
 
 (defun random-table/roller/string (string)
@@ -607,9 +637,9 @@ See `random-table'."
    ((when-let ((table (random-table/fetch string :allow_nil t)))
     (random-table/roll-on table)))
    ((or (string= "d66" (string-trim string))
-	(string-match-p random-table/dice/regex string))
+        (string-match-p random-table/dice/regex string))
     (if current-prefix-arg
-	(read-number (format "Roll %s: " string))
+        (read-number (format "Roll %s: " string))
       (string-to-number
        (format "%s" (random-table/dice/roll (string-trim string))))))
    (t (random-table/parse string))))
@@ -617,11 +647,11 @@ See `random-table'."
 (defun random-table/roller/seq (seq)
   "Interpolate given SEQ as a roller."
   (let ((func (car seq))
-	(rolls (mapcar
-		(lambda (text)
-		  (string-to-number
-		   (format "%s" (random-table/roller/string text))))
-		(cdr seq))))
+        (rolls (mapcar
+                (lambda (text)
+                  (string-to-number
+                   (format "%s" (random-table/roller/string text))))
+                (cdr seq))))
     (apply func rolls)))
 
 (defun random-table/filter/default (&rest rolls)
@@ -641,29 +671,29 @@ When ROLL is not given, choose a random element from the TABLE."
       ;; Sniff out if the first element to see if we're dealing with a table
       ;; that has ranges.
       (if (-cons-pair? (car data))
-	  ;; We have a cons-pair, meaning we have multiple rolls mapping to the
-	  ;; same result.
-	  (cdr (seq-find
-		(lambda (row)
-		  (if (-cons-pair? row)
-		      (let ((range (car row)))
-			(cond
-			 ((-cons-pair? range)
-			  (and (>= index (car range)) (<= index (cdr range))))
-			 ((listp range)
-			  (member index range))
-			 ((integerp range)
-			  (= index range))
-			 ((stringp range)
-			  (string= index range))
-			 (t
-			  (error (concat "Expected `cons', `list', `string' or "
-					 "`integer' got %s for row %S.")
-				 (type-of range) row))))
-		    (member index (car row))))
-		data))
-	;; Off by one errors are so very real.
-	(nth (- index 1) data))
+          ;; We have a cons-pair, meaning we have multiple rolls mapping to the
+          ;; same result.
+          (cdr (seq-find
+                (lambda (row)
+                  (if (-cons-pair? row)
+                      (let ((range (car row)))
+                        (cond
+                         ((-cons-pair? range)
+                          (and (>= index (car range)) (<= index (cdr range))))
+                         ((listp range)
+                          (member index range))
+                         ((integerp range)
+                          (= index range))
+                         ((stringp range)
+                          (string= index range))
+                         (t
+                          (error (concat "Expected `cons', `list', `string' or "
+                                         "`integer' got %s for row %S.")
+                                 (type-of range) row))))
+                    (member index (car row))))
+                data))
+        ;; Off by one errors are so very real.
+        (nth (- index 1) data))
     (seq-random-elt data)))
 
 
@@ -685,11 +715,11 @@ This function favors re-using and caching values.
 Why cache values?  Some tables you roll one set of dice and then
 use those dice to lookup on other tables."
   (let ((results
-	 (or (when-let ((reuse-table-name (random-table-reuse table)))
-	       (or
-		(random-table/storage/results/get-rolled-value reuse-table-name)
-		(random-table/roll-on (random-table/fetch reuse-table-name) roller)))
-	     (random-table/roll-on table roller))))
+         (or (when-let ((reuse-table-name (random-table-reuse table)))
+               (or
+                (random-table/storage/results/get-rolled-value reuse-table-name)
+                (random-table/roll-on (random-table/fetch reuse-table-name) roller)))
+             (random-table/roll-on table roller))))
     (when (random-table-store table)
       (random-table/storage/results/put-rolled-value
        (random-table-name table) results))
@@ -698,20 +728,20 @@ use those dice to lookup on other tables."
 (defun random-table/evaluate/table/fetch-rolled-value (table rolled)
   "Fetch the ROLLED value from the TABLE's :data slot."
   (let* ((table (random-table/fetch table))
-	 (data (random-table-data table))
-	 (filtered (apply (random-table-filter table) (-list rolled)))
-	 (row (funcall (random-table-fetcher table) data (-list filtered))))
+         (data (random-table-data table))
+         (filtered (apply (random-table-filter table) (-list rolled)))
+         (row (funcall (random-table-fetcher table) data (-list filtered))))
     (or (when row (random-table/parse row)) "")))
 
 (defun random-table/roll/test-all ()
   "A convenience function to test all of the public `random-table' entries."
   (maphash (lambda (key table)
-	     (unless (random-table-private table)
-	       (message "Testing %s table" key)
-	       ;; The test does not call these interactively, but the methods
-	       ;; assume a current-prefix-arg
-	       (funcall #'random-table/roll (random-table-name table))))
-	   random-table/storage/tables))
+             (unless (random-table-private table)
+               (message "Testing %s table" key)
+               ;; The test does not call these interactively, but the methods
+               ;; assume a current-prefix-arg
+               (funcall #'random-table/roll (random-table-name table))))
+           random-table/storage/tables))
 
 (provide 'random-table)
 ;;; random-table.el ends here
