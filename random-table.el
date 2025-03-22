@@ -666,7 +666,14 @@ See `random-table/roller/default'."
 (defun random-table/fetcher/default (data &optional roll)
   "Find ROLL on the given table's DATA.
 
-When ROLL is not given, choose a random element from the TABLE."
+When ROLL is not given, choose a random element from the TABLE.
+
+We need to sniff out what type is the roll (e.g. integer, string, list,
+nil).  We also need to know about the data, is it a simple list or list
+of cons pairs?
+
+This is a refactoring work in progress.  I could perhaps introduce more
+than the default fetcher and thus simplify this logic."
   ;; Yuck is this difficult to read.
   (if-let ((index
              (pcase (type-of roll)
