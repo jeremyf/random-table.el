@@ -674,9 +674,7 @@ When ROLL is not given, choose a random element from the TABLE."
                (_ roll))))
     ;; Sniff out if the first element to see if we're dealing with a table
     ;; that has ranges.
-    (if (nlistp (car data))
-      ;; Off by one errors are so very real.
-      (nth (- index 1) data)
+    (if (-cons-pair? (car data))
       ;; We have a cons-pair, meaning we have multiple rolls mapping to the
       ;; same result.
       (cdr (seq-find
@@ -716,7 +714,11 @@ When ROLL is not given, choose a random element from the TABLE."
                            (type-of range) row))))
                    (member index (car row)))))
                data)
-             ))
+        )
+      ;; Off by one errors are so very real.
+      (if (stringp index)
+        (alist-get index datat nil nil #'string=)
+        (nth (- index 1) data)))
     (seq-random-elt data)))
 
 
