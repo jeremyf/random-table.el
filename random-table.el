@@ -668,10 +668,15 @@ See `random-table/roller/default'."
 
 When ROLL is not given, choose a random element from the TABLE."
   ;; Yuck is this difficult to read.
-  (if-let ((index (if (or (stringp roll) (integerp roll)) roll (car roll))))
+  (if-let ((index
+             (pcase (type-of roll)
+               ('cons (car roll))
+               (_ roll))))
     ;; Sniff out if the first element to see if we're dealing with a table
     ;; that has ranges.
-    (if (-cons-pair? (car data))
+    (if (nlistp (car data))
+      ;; Off by one errors are so very real.
+      (nth (- index 1) data)
       ;; We have a cons-pair, meaning we have multiple rolls mapping to the
       ;; same result.
       (cdr (seq-find
@@ -711,9 +716,7 @@ When ROLL is not given, choose a random element from the TABLE."
                            (type-of range) row))))
                    (member index (car row)))))
                data)
-             )
-      ;; Off by one errors are so very real.
-      (nth (- index 1) data))
+             ))
     (seq-random-elt data)))
 
 
