@@ -667,33 +667,53 @@ See `random-table/roller/default'."
   "Find ROLL on the given table's DATA.
 
 When ROLL is not given, choose a random element from the TABLE."
-  (if-let ((index (if (integerp roll) roll (car roll))))
-      ;; Sniff out if the first element to see if we're dealing with a table
-      ;; that has ranges.
-      (if (-cons-pair? (car data))
-          ;; We have a cons-pair, meaning we have multiple rolls mapping to the
-          ;; same result.
-          (cdr (seq-find
-                (lambda (row)
-                  (if (-cons-pair? row)
-                      (let ((range (car row)))
-                        (cond
-                         ((-cons-pair? range)
-                          (and (>= index (car range)) (<= index (cdr range))))
-                         ((listp range)
-                          (member index range))
-                         ((integerp range)
-                          (= index range))
-                         ((stringp range)
-                          (string= index range))
-                         (t
-                          (error (concat "Expected `cons', `list', `string' or "
-                                         "`integer' got %s for row %S.")
-                                 (type-of range) row))))
-                    (member index (car row))))
-                data))
-        ;; Off by one errors are so very real.
-        (nth (- index 1) data))
+  ;; Yuck is this difficult to read.
+  (if-let ((index (if (or (stringp roll) (integerp roll)) roll (car roll))))
+    ;; Sniff out if the first element to see if we're dealing with a table
+    ;; that has ranges.
+    (if (-cons-pair? (car data))
+      ;; We have a cons-pair, meaning we have multiple rolls mapping to the
+      ;; same result.
+      (cdr (seq-find
+             (if (integerp index)
+               (lambda (row)
+                 "Integer finder"
+                 (if (-cons-pair? row)
+                   (let ((range (car row)))
+                     (cond
+                       ((-cons-pair? range)
+                         (and (>= index (car range)) (<= index (cdr range))))
+                       ((listp range)
+                         (member index range))
+                       ((integerp range)
+                         (= index range))
+                       ((stringp range)
+                         (string= (format "%s" index) range))
+                       (t
+                         (error (concat "Expected `cons', `list', `string' or "
+                                  "`integer' got %s for row %S.")
+                           (type-of range) row))))
+                   (member index (car row))))
+               (lambda (row)
+                 "String finder"
+                 (if (-cons-pair? row)
+                   (let ((range (car row)))
+                     (cond
+                       ((listp range)
+                         (member index range))
+                       ((integerp range)
+                         (string= index (int-to-string range)))
+                       ((stringp range)
+                         (string= index range))
+                       (t
+                         (error (concat "Expected `cons', `list', `string' or "
+                                  "`integer' got %s for row %S.")
+                           (type-of range) row))))
+                   (member index (car row)))))
+               data)
+             )
+      ;; Off by one errors are so very real.
+      (nth (- index 1) data))
     (seq-random-elt data)))
 
 
